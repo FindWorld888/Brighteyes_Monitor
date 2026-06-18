@@ -1,0 +1,2137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BrightEyes 订阅监控</title>
+<link rel="stylesheet" href="/static/css/bootstrap.min.css">
+<link rel="stylesheet" href="/static/css/bootstrap-icons.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: radial-gradient(1200px 700px at 10% 0%, #183043, #0f1822 65%, #0b1118 100%);
+    color: #dbe7f3;
+    min-height: 100vh;
+  }
+  body.embedded { background: transparent; }
+
+  .header {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(123, 169, 210, 0.25);
+    background: rgba(10, 20, 30, 0.95);
+    backdrop-filter: blur(6px);
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+  }
+  body.embedded .header {
+    display: block;
+    position: sticky;
+    top: 0;
+    padding: 8px 10px;
+    background: rgba(10, 20, 30, 0.96);
+  }
+  body.embedded .sub-header-title-row { display: none !important; }
+  body.embedded .toolbar { margin-top: 0; }
+
+  .title { font-size: 18px; font-weight: 700; letter-spacing: 0.3px; }
+  .subtitle { margin-top: 4px; color: #8fb2cf; font-size: 12px; }
+
+  .toolbar {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .toolbar input, .toolbar select {
+    padding: 7px 10px;
+    border-radius: 6px;
+    border: 1px solid #39536a;
+    background: #0f1b27;
+    color: #e7f1fb;
+    font-size: 13px;
+  }
+  .toolbar input { width: 140px; }
+  .toolbar input.short { width: 80px; }
+
+  .btn {
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #fff;
+    transition: transform 0.12s ease, opacity 0.12s ease;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn-primary { background: #2a85ff; }
+  .btn-success { background: #2ecc71; }
+  .btn-danger { background: #e74c3c; }
+  .btn-secondary { background: #43627f; }
+  .btn-warning { background: #f39c12; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  .conn-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #e74c3c; display: inline-block; margin-right: 6px;
+  }
+  .conn-dot.connected { background: #2ecc71; }
+
+  .main-content {
+    padding-top: 130px; /* header height */
+  }
+  body.embedded .main-content { padding-top: 0 !important; }
+
+  .panes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 10px;
+    min-height: calc(100vh - 140px);
+  }
+
+  .pane {
+    border: 1px solid rgba(122, 165, 203, 0.35);
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(12, 23, 33, 0.72);
+    display: flex;
+    flex-direction: column;
+    min-height: 500px;
+  }
+
+  .pane-head {
+    padding: 10px 14px;
+    background: rgba(31, 57, 79, 0.85);
+    border-bottom: 1px solid rgba(122, 165, 203, 0.25);
+    font-size: 14px;
+    color: #b4d0e7;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+
+  .pane-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+  }
+
+  /* 可用相机列表 */
+  .camera-list {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+    padding: 8px;
+    background: rgba(20, 35, 50, 0.6);
+    border-radius: 8px;
+    border: 1px solid #2a3a4a;
+  }
+  .camera-chip {
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid #39536a;
+    background: #1a2a3a;
+    color: #8fb2cf;
+    transition: all 0.15s ease;
+  }
+  .camera-chip:hover { background: #2a4a6a; color: #e7f1fb; }
+  .camera-chip.active { background: #2ecc71; color: #fff; border-color: #2ecc71; }
+  .camera-chip.streaming { background: #3498db; color: #fff; border-color: #3498db; }
+  .camera-chip.camera-ok {
+    background: rgba(46, 204, 113, 0.18);
+    border-color: #2ecc71;
+    color: #a8f0c6;
+  }
+  .camera-chip.camera-offline {
+    background: rgba(231, 76, 60, 0.18);
+    border-color: #e74c3c;
+    color: #ffb4aa;
+  }
+  .camera-chip.camera-disabled {
+    background: rgba(243, 156, 18, 0.2);
+    border-color: #f39c12;
+    color: #ffd596;
+  }
+  .camera-chip.camera-unknown {
+    background: rgba(149, 165, 166, 0.12);
+    border-color: #607d8b;
+    color: #b7c7cf;
+  }
+  .camera-chip.streaming {
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.45) inset;
+  }
+
+  /* 视频流区域 */
+  .video-grid {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+
+  .video-cell {
+    background: #111;
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .video-cell video {
+    width: 100%;
+    display: block;
+    background: #000;
+  }
+
+  .video-cell .label {
+    position: absolute; top: 6px; left: 8px;
+    background: rgba(0,0,0,0.6);
+    padding: 2px 8px; border-radius: 3px; font-size: 12px;
+  }
+
+  .video-cell .stats {
+    position: absolute; bottom: 6px; right: 8px;
+    background: rgba(0,0,0,0.6);
+    padding: 2px 8px; border-radius: 3px; font-size: 11px; color: #aaa;
+  }
+
+  .video-cell .state-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    display: inline-block; margin-right: 4px;
+  }
+  .video-cell .state-dot.connecting { background: #f39c12; }
+  .video-cell .state-dot.connected  { background: #2ecc71; }
+  .video-cell .state-dot.failed     { background: #e74c3c; }
+  .video-cell .state-dot.closed     { background: #95a5a6; }
+
+  /* Topic 区域 */
+  .topic-section { margin-bottom: 12px; }
+  .topic-section-title { font-size: 11px; color: #8fb2cf; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .sub-input-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .sub-input-row input, .sub-input-row textarea {
+    flex: 1;
+    min-width: 180px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #39536a;
+    background: #0f1b27;
+    color: #e7f1fb;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .sub-input-row textarea {
+    min-height: 60px;
+    resize: vertical;
+    font-family: monospace;
+    font-size: 12px;
+  }
+
+  .preset-topics {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .preset-chip {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    cursor: pointer;
+    background: #1a2a3a;
+    border: 1px solid #39536a;
+    color: #8fb2cf;
+    transition: all 0.15s ease;
+  }
+  .preset-chip:hover { background: #2a4a6a; color: #e7f1fb; }
+
+  .publish-presets {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .publish-preset {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: rgba(26, 42, 58, 0.9);
+    border: 1px solid #39536a;
+  }
+  .publish-preset-name {
+    min-width: 0;
+    color: #b7d1e8;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .publish-preset-actions {
+    display: inline-flex;
+    gap: 4px;
+    flex: 0 0 auto;
+  }
+
+  .sub-list { margin-bottom: 10px; }
+  .sub-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: #1a2a1a;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    font-size: 12px;
+  }
+  .sub-item .sub-topic { flex: 1; color: #2ecc71; word-break: break-all; font-family: monospace; }
+  .sub-item .btn-remove {
+    background: transparent; color: #e74c3c; border: none;
+    cursor: pointer; font-size: 14px; padding: 0 4px;
+  }
+
+  /* 发布区域 */
+  .pub-section {
+    padding: 10px;
+    background: rgba(20, 35, 50, 0.6);
+    border-radius: 8px;
+    border: 1px solid #2a3a4a;
+    margin-bottom: 10px;
+  }
+  .pub-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .pub-row input, .pub-row select {
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid #39536a;
+    background: #0f1b27;
+    color: #e7f1fb;
+    font-size: 12px;
+  }
+  .pub-row input { flex: 1; min-width: 120px; }
+  .pub-payload {
+    width: 100%;
+    min-height: 50px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #39536a;
+    background: #0f1b27;
+    color: #e7f1fb;
+    font-family: monospace;
+    font-size: 12px;
+    resize: vertical;
+  }
+  .freq-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    background: #3a1a1a;
+    color: #f39c12;
+  }
+  .freq-badge.active { background: #1a3a2a; color: #2ecc71; animation: pulse 1s infinite; }
+
+  /* 消息日志 */
+  .msg-log { font-family: monospace; font-size: 11px; }
+  .msg-item {
+    padding: 6px 8px;
+    border-bottom: 1px solid #1a1a2e;
+    cursor: pointer;
+  }
+  .msg-item:hover { background: #1a1a2e; }
+  .msg-item .msg-time { color: #555; margin-right: 8px; }
+  .msg-item .msg-dir { font-weight: bold; margin-right: 4px; }
+  .msg-item .msg-dir.recv { color: #2ecc71; }
+  .msg-item .msg-dir.send { color: #3498db; }
+  .msg-item .msg-topic { color: #f39c12; margin-right: 8px; }
+  .msg-item .msg-payload {
+    color: #888; display: block; margin-top: 4px; padding-left: 12px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-height: 1.5em;
+  }
+  .msg-item.expanded .msg-payload {
+    white-space: pre-wrap; max-height: none; overflow: visible;
+  }
+
+  .empty-hint { color: #555; font-size: 13px; text-align: center; padding: 30px; }
+
+  /* 连接测试面板 */
+  .conn-test-panel {
+    display: none;
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: rgba(20, 35, 50, 0.8);
+    border-radius: 8px;
+    border: 1px solid #2a3a4a;
+    font-size: 12px;
+  }
+  .conn-test-panel.visible { display: block; }
+  .conn-test-result {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+  }
+  .conn-test-result .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .conn-test-result .dot.ok { background: #2ecc71; }
+  .conn-test-result .dot.fail { background: #e74c3c; }
+  .conn-test-result .dot.pending { background: #f39c12; animation: pulse 1s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 1200px) {
+    .panes { grid-template-columns: 1fr; }
+    .pane { min-height: 400px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header" id="headerBar">
+  <div class="sub-header-title-row" style="display:flex;justify-content:space-between;align-items:center;">
+    <div>
+      <div class="title"><i class="bi bi-broadcast me-2"></i>BrightEyes 订阅监控</div>
+      <div class="subtitle">视频流订阅 + MQTT Topic 订阅监控</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span class="conn-dot" id="connDot"></span>
+      <span id="connStatus" style="color:#8fb2cf;font-size:13px;">未连接</span>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <label style="color:#8fb2cf;font-size:12px;">Broker:</label>
+    <input id="mqttHost" placeholder="MQTT Host" />
+    <input id="mqttPort" class="short" placeholder="WS Port" />
+    <label style="color:#8fb2cf;font-size:12px;">Node:</label>
+    <input id="nodeId" placeholder="node_id" style="width:100px;" />
+    <button class="btn btn-success btn-sm" id="btnConnect"><i class="bi bi-plug me-1"></i>连接</button>
+    <button class="btn btn-danger btn-sm" id="btnDisconnect" style="display:none;"><i class="bi bi-x-circle me-1"></i>断开</button>
+    <button class="btn btn-secondary btn-sm" id="btnLoadConfig"><i class="bi bi-download me-1"></i>加载配置</button>
+    <button class="btn btn-warning btn-sm" id="btnTestConn"><i class="bi bi-lightning me-1"></i>联通测试</button>
+  </div>
+
+  <!-- 联通测试结果面板（内联，不跳转） -->
+  <div class="conn-test-panel" id="connTestPanel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span style="color:#8fb2cf;font-weight:600;">联通测试结果</span>
+      <button class="btn btn-secondary" style="padding:2px 8px;font-size:11px;" onclick="document.getElementById('connTestPanel').classList.remove('visible')">✕</button>
+    </div>
+    <div id="connTestResults"></div>
+  </div>
+</div>
+
+<div class="main-content">
+  <div class="panes">
+    <!-- 视频流订阅 -->
+    <section class="pane">
+      <div class="pane-head">
+        <span><i class="bi bi-camera-video me-2"></i>视频流订阅</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input id="cameraIdInput" placeholder="相机ID: 1,2,4" style="width:120px;padding:5px 8px;border-radius:4px;border:1px solid #39536a;background:#0f1b27;color:#e7f1fb;font-size:12px;" />
+          <button class="btn btn-primary btn-sm" id="btnSubscribeVideo">
+            <i class="bi bi-play-fill me-1"></i>订阅
+          </button>
+          <button class="btn btn-secondary btn-sm" id="btnRefreshStreams">
+            <i class="bi bi-arrow-clockwise me-1"></i>刷新
+          </button>
+          <button class="btn btn-danger btn-sm" id="btnStopAllVideo">
+            <i class="bi bi-stop-fill me-1"></i>全停
+          </button>
+        </div>
+      </div>
+      <div class="pane-body">
+        <!-- 可用相机列表 -->
+        <div id="cameraListSection" style="display:none;">
+          <div class="topic-section-title" id="cameraListTitle">可用相机/视频流（点击选择）</div>
+          <div class="camera-list" id="cameraList"></div>
+        </div>
+        <div class="video-grid" id="videoGrid">
+          <div class="empty-hint">连接 MQTT 后自动获取可用相机列表<br>输入相机ID或点击相机芯片订阅</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Topic 订阅与发布 -->
+    <section class="pane">
+      <div class="pane-head">
+        <span><i class="bi bi-chat-left-text me-2"></i>Topic 订阅 / 发布</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <span id="msgCount" style="font-size:11px;color:#8fb2cf;">消息: 0</span>
+          <button class="btn btn-secondary btn-sm" id="btnClearMsgs">
+            <i class="bi bi-trash me-1"></i>清空
+          </button>
+        </div>
+      </div>
+      <div class="pane-body">
+        <!-- 已有 Topic 快捷选择 -->
+        <div class="topic-section">
+          <div class="topic-section-title">常用 Topic 快捷订阅</div>
+          <div class="preset-topics" id="presetTopics"></div>
+        </div>
+
+        <!-- 订阅输入 -->
+        <div class="topic-section">
+          <div class="topic-section-title">自定义订阅</div>
+          <div class="sub-input-row">
+            <input id="topicInput" placeholder="输入要订阅的 Topic，支持通配符 # 和 +" />
+            <button class="btn btn-success btn-sm" id="btnSubscribeTopic">
+              <i class="bi bi-plus-circle me-1"></i>订阅
+            </button>
+          </div>
+          <div class="sub-list" id="subList">
+            <div style="color:#555;font-size:12px;">暂无订阅</div>
+          </div>
+        </div>
+
+        <!-- 发布区域 -->
+        <div class="topic-section">
+          <div class="topic-section-title">发布消息 (MQTT)</div>
+          <div class="publish-presets" id="publishPresets"></div>
+          <div class="pub-section">
+            <div class="pub-row">
+              <input id="pubTopic" placeholder="发布 Topic" style="flex:2;" />
+              <select id="pubFreq" style="width:auto;">
+                <option value="0">单次发送</option>
+                <option value="1">1 Hz</option>
+                <option value="2">2 Hz</option>
+                <option value="5">5 Hz</option>
+                <option value="10">10 Hz</option>
+              </select>
+              <button class="btn btn-primary btn-sm" id="btnPublish"><i class="bi bi-send me-1"></i>发送</button>
+              <button class="btn btn-danger btn-sm" id="btnStopPub" style="display:none;"><i class="bi bi-stop-fill me-1"></i>停止</button>
+              <span class="freq-badge" id="freqBadge" style="display:none;">
+                <i class="bi bi-arrow-repeat"></i><span id="freqText"></span>
+              </span>
+            </div>
+            <textarea class="pub-payload" id="pubPayload" placeholder='{"key": "value"}'></textarea>
+          </div>
+        </div>
+
+        <!-- HTTP WebRTC 拉流测试 -->
+        <div class="topic-section">
+          <div class="topic-section-title">HTTP WebRTC 拉流测试</div>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+            <label style="color:#8fb2cf;font-size:12px;">服务地址:</label>
+            <input id="httpHost" placeholder="C++ 服务IP" style="width:140px;padding:5px 8px;border-radius:4px;border:1px solid #39536a;background:#0f1b27;color:#e7f1fb;font-size:12px;" />
+            <label style="color:#8fb2cf;font-size:12px;">端口:</label>
+            <input id="httpPort" placeholder="8488" value="8488" style="width:70px;padding:5px 8px;border-radius:4px;border:1px solid #39536a;background:#0f1b27;color:#e7f1fb;font-size:12px;" />
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+            <label style="color:#8fb2cf;font-size:12px;">相机ID:</label>
+            <input id="httpCameraIdInput" placeholder="输入相机ID，多个用逗号分隔: 1,2,4" style="flex:1;min-width:200px;padding:5px 8px;border-radius:4px;border:1px solid #39536a;background:#0f1b27;color:#e7f1fb;font-size:12px;" />
+            <button class="btn btn-success btn-sm" id="btnHttpPull">
+              <i class="bi bi-play-fill me-1"></i>HTTP 拉流
+            </button>
+            <button class="btn btn-danger btn-sm" id="btnHttpStop">
+              <i class="bi bi-stop-fill me-1"></i>HTTP 停止
+            </button>
+            <span id="httpStatus" style="color:#8fb2cf;font-size:12px;"></span>
+          </div>
+          <div id="httpResultPanel" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(20,35,50,0.8);border-radius:8px;border:1px solid #2a3a4a;font-size:12px;max-height:300px;overflow-y:auto;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <span style="color:#8fb2cf;font-weight:600;">HTTP 响应结果</span>
+              <button class="btn btn-secondary" style="padding:2px 8px;font-size:11px;" onclick="document.getElementById('httpResultPanel').style.display='none'">✕</button>
+            </div>
+            <pre id="httpResultContent" style="margin:0;color:#b7d1e8;white-space:pre-wrap;word-break:break-all;"></pre>
+          </div>
+        </div>
+
+        <!-- 消息日志 -->
+        <div class="topic-section">
+          <div class="topic-section-title">消息记录</div>
+          <div class="msg-log" id="msgLog">
+            <div class="empty-hint">订阅 Topic 后，收到的消息将显示在这里</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script src="/static/js/mqtt.min.js"></script>
+<script>
+// ================================================================
+//  全局状态
+// ================================================================
+let mqttClient = null;
+let clientId = '';
+let seqNum = 1;
+const viewers = new Map();
+const subscribedTopics = new Set();
+const messageLog = [];
+const MAX_LOG = 500;
+let msgCount = 0;
+let pubTimer = null;    // 周期发布定时器
+let pubCount = 0;       // 已发送次数
+let configuredCameras = []; // 从 camera_config 获取的完整相机列表
+let availableStreams = [];  // 从 webrtc/create_offer 响应获取的可用视频流
+const cameraStatusById = new Map(); // 从 get_status 获取的运行状态
+const cameraConnectivityByIp = new Map(); // 从 /api/camera/connectivity 获取的相机联通状态
+
+const AGV_REQ_PREFIX = 'agv/v1/s/';
+const AGV_RES_PREFIX = 'agv/v1/c/';
+
+// 预设常用 Topic
+const PRESET_TOPICS = [];
+const PUBLISH_PRESETS = [
+  {
+    id: 'get_status',
+    label: '获取节点状态',
+    topicPath: nodeId => `cluster/nodes/${nodeId}/get_status`,
+    payload: () => ({ __req_id__: makeReqId('status') })
+  },
+  {
+    id: 'get_result',
+    label: '获取检测结果',
+    topicPath: nodeId => `cluster/nodes/${nodeId}/camera/get_result`,
+    payload: () => ({ __req_id__: makeReqId('result') })
+  },
+  {
+    id: 'camera_start',
+    label: '启动相机',
+    topicPath: nodeId => `cluster/nodes/${nodeId}/camera/start`,
+    payload: () => ({ __req_id__: makeReqId('start'), camera_id: getPublishCameraIds(), task: 'detect' })
+  },
+  {
+    id: 'camera_stop',
+    label: '停止相机',
+    topicPath: nodeId => `cluster/nodes/${nodeId}/camera/stop`,
+    payload: () => ({ __req_id__: makeReqId('stop'), camera_id: getPublishCameraId() })
+  },
+  {
+    id: 'webrtc_offer',
+    label: 'WebRTC Offer',
+    topicPath: nodeId => `cluster/nodes/${nodeId}/camera/webrtc/create_offer`,
+    payload: () => {
+      const ids = getPublishCameraIds();
+      const payload = { __req_id__: makeReqId('offer'), client_id: clientId || 'bevp_sub_manual' };
+      if (ids.length > 0) payload.camera_id = ids;
+      return payload;
+    }
+  },
+  {
+    id: 'webrtc_answer',
+    label: 'WebRTC Answer',
+    topicPath: nodeId => `cluster/nodes/${nodeId}/camera/webrtc/set_answer`,
+    payload: () => ({ __req_id__: makeReqId('answer'), client_id: clientId || 'bevp_sub_manual', sdp: '<PASTE_SDP_HERE>' })
+  },
+  {
+    id: 'webrtc_stop',
+    label: 'WebRTC 停止推流',
+    topicPath: nodeId => `cluster/nodes/${nodeId}/camera/webrtc/stop`,
+    payload: () => ({ __req_id__: makeReqId('webrtc_stop'), camera_id: getPublishCameraIds() })
+  },
+  {
+    id: 'record_start',
+    label: '回溯开启',
+    topicPath: nodeId => `cluster/nodes/${nodeId}/camera/record/start`,
+    payload: () => ({ __req_id__: makeReqId('record_start'), camera_id: getPublishCameraId() })
+  },
+  {
+    id: 'record_stop',
+    label: '回溯关闭',
+    topicPath: nodeId => `cluster/nodes/${nodeId}/camera/record/stop`,
+    payload: () => ({ __req_id__: makeReqId('record_stop'), camera_id: getPublishCameraId() })
+  },
+  {
+    id: 'capture_start',
+    label: '开始抓取',
+    topicPath: nodeId => `cluster/nodes/${nodeId}/camera/capture/start`,
+    payload: () => ({ __req_id__: makeReqId('capture_start'), camera_id: getPublishCameraId(), capture_mode: 'image' })
+  },
+  {
+    id: 'capture_stop',
+    label: '停止抓取',
+    topicPath: nodeId => `cluster/nodes/${nodeId}/camera/capture/stop`,
+    payload: () => ({ __req_id__: makeReqId('capture_stop'), camera_id: getPublishCameraId(), capture_mode: 'image' })
+  },
+  {
+    id: 'shield_start',
+    label: '开启相机遮蔽',
+    topicPath: nodeId => `cluster/nodes/${nodeId}/camera/shield/start`,
+    payload: () => ({ __req_id__: makeReqId('shield_start'), camera_id: getPublishCameraId() })
+  },
+  {
+    id: 'shield_stop',
+    label: '关闭相机遮蔽',
+    topicPath: nodeId => `cluster/nodes/${nodeId}/camera/shield/stop`,
+    payload: () => ({ __req_id__: makeReqId('shield_stop'), camera_id: getPublishCameraId() })
+  },
+  {
+    id: 'update_showmode',
+    label: '切换隐私模式',
+    topicPath: () => 'cluster/nodes/update_showmode',
+    payload: () => ({ __req_id__: makeReqId('showmode'), show_mode: 0 })
+  },
+  {
+    id: 'update_camera_config',
+    label: '更新相机配置',
+    topicPath: nodeId => `cluster/nodes/${nodeId}/update_camera_config`,
+    payload: () => ({ __req_id__: makeReqId('cam_cfg') })
+  },
+  {
+    id: 'update_area_config',
+    label: '更新区域配置',
+    topicPath: nodeId => `cluster/nodes/${nodeId}/update_area_config`,
+    payload: () => ({ __req_id__: makeReqId('area_cfg') })
+  },
+  {
+    id: 'restart_node',
+    label: '重启节点',
+    topicPath: nodeId => `cluster/nodes/${nodeId}/restart_node`,
+    payload: () => ({ __req_id__: makeReqId('restart') })
+  },
+];
+
+function reqTopic(path) { return `${AGV_REQ_PREFIX}${path}`; }
+function resTopic(path) { return `${AGV_RES_PREFIX}${clientId}/${path}`; }
+
+function normalizeCameraOrStreamId(id) {
+  const text = String(id).trim();
+  const num = parseInt(text, 10);
+  return !Number.isNaN(num) && String(num) === text ? num : text;
+}
+
+function makeReqId(prefix = 'req') {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function buildEnvelope(payload, options = {}) {
+  const consumeSeq = options.consumeSeq !== false;
+  return {
+    version: '1.0.1',
+    seq: String(consumeSeq ? seqNum++ : seqNum),
+    srcAddr: clientId || 'bevp_sub_manual',
+    payload,
+    ack: { code: 0 }
+  };
+}
+
+function getPublishCameraIds() {
+  const input = document.getElementById('cameraIdInput')?.value.trim() || '';
+  if (input) {
+    return input.split(',').map(s => s.trim()).filter(Boolean).map(normalizeCameraOrStreamId);
+  }
+  const firstStream = availableStreams[0];
+  if (firstStream) {
+    return [normalizeCameraOrStreamId(firstStream.camera_id ?? firstStream.cameraId ?? firstStream.stream_id ?? firstStream.streamId)];
+  }
+  const firstCamera = configuredCameras.find(cam => String(cam.camera_state || 'ON').toUpperCase() !== 'OFF') || configuredCameras[0];
+  if (firstCamera && firstCamera.camera_id !== undefined && firstCamera.camera_id !== null) {
+    return [normalizeCameraOrStreamId(firstCamera.camera_id)];
+  }
+  return [1];
+}
+
+function getPublishCameraId() {
+  return getPublishCameraIds()[0] ?? 1;
+}
+
+// ================================================================
+//  加载配置
+// ================================================================
+function getDefaultMqttHost() {
+  return window.location.hostname || '127.0.0.1';
+}
+
+function normalizeMqttHost(host) {
+  const value = String(host || '').trim();
+  const lower = value.toLowerCase();
+  if (!value || lower === '127.0.0.1' || lower === 'localhost' || lower === '::1' || lower === '[::1]') {
+    return getDefaultMqttHost();
+  }
+  return value;
+}
+
+async function loadGlobConfig() {
+  try {
+    const res = await fetch('/api/config/glob');
+    if (!res.ok) throw new Error('加载配置失败');
+    const data = await res.json();
+    const gc = data.glob_config || data;
+    const mqttParams = gc.mqtt_params || {};
+
+    document.getElementById('mqttHost').value = normalizeMqttHost(mqttParams.URI);
+    document.getElementById('mqttPort').value = mqttParams.wsPort || 9001;
+    document.getElementById('nodeId').value = gc.node_id || 'node_1';
+
+    // 自动填充 HTTP 测试地址（与 MQTT 同一台主机）
+    const httpHostEl = document.getElementById('httpHost');
+    if (httpHostEl && !httpHostEl.value) {
+      httpHostEl.value = normalizeMqttHost(mqttParams.URI);
+    }
+    const httpPortEl = document.getElementById('httpPort');
+    if (httpPortEl && gc.http_port) {
+      httpPortEl.value = gc.http_port;
+    }
+
+    // 根据 node_id 生成预设 topic
+    updatePresetTopics(gc.node_id || 'node_1');
+    await loadCameraConfig();
+    await loadCameraConnectivity();
+    showToast('配置已加载', 'success');
+  } catch (err) {
+    showToast('加载配置失败: ' + err.message, 'error');
+  }
+}
+
+function applyExternalMqttConfig(payload, options = {}) {
+  const host = payload.mqttHost || payload.URI || payload.uri || '';
+  const port = payload.mqttPort || payload.wsPort || payload.Port || '';
+  const nodeId = payload.nodeId || payload.node_id || '';
+
+  const hostEl = document.getElementById('mqttHost');
+  const portEl = document.getElementById('mqttPort');
+  const nodeEl = document.getElementById('nodeId');
+  const oldHost = hostEl.value;
+  const oldPort = portEl.value;
+  const wasConnected = !!(mqttClient && mqttClient.connected);
+
+  if (host) hostEl.value = host;
+  if (port) portEl.value = port;
+  if (nodeId) {
+    nodeEl.value = nodeId;
+    updatePresetTopics(nodeId);
+  }
+
+  const brokerChanged = hostEl.value !== oldHost || portEl.value !== oldPort;
+  if (options.reconnect && wasConnected && brokerChanged) {
+    showToast('全局配置已同步，正在重连 MQTT...', 'info');
+    doDisconnect();
+    doConnect();
+  } else {
+    showToast('全局配置已同步到订阅监控', 'success');
+  }
+}
+
+window.applyExternalMqttConfig = applyExternalMqttConfig;
+window.addEventListener('message', (event) => {
+  if (event.origin !== window.location.origin) return;
+  const data = event.data || {};
+  if (data.type === 'bevp:glob-config-updated') {
+    applyExternalMqttConfig(data, { reconnect: true });
+  }
+});
+
+async function loadCameraConfig() {
+  try {
+    const res = await fetch('/api/config/camera');
+    if (!res.ok) throw new Error('加载相机配置失败');
+    const data = await res.json();
+    const cameras = Array.isArray(data.camera_config) ? data.camera_config : [];
+    configuredCameras = cameras
+      .filter(cam => cam && cam.camera_id !== undefined && cam.camera_id !== null)
+      .sort((a, b) => Number(a.camera_id) - Number(b.camera_id));
+    renderCameraList();
+  } catch (err) {
+    showToast('加载相机配置失败: ' + err.message, 'error');
+  }
+}
+
+async function loadCameraConnectivity() {
+  try {
+    const res = await fetch('/api/camera/connectivity');
+    if (!res.ok) throw new Error('加载相机联通状态失败');
+    const data = await res.json();
+    cameraConnectivityByIp.clear();
+    const status = data.status || {};
+    Object.entries(status).forEach(([ip, info]) => {
+      if (!ip) return;
+      cameraConnectivityByIp.set(String(ip), !!(info && info.reachable));
+    });
+    renderCameraList();
+  } catch (err) {
+    console.warn('加载相机联通状态失败:', err);
+  }
+}
+
+function updatePresetTopics(nodeId) {
+  PRESET_TOPICS.length = 0;
+  PRESET_TOPICS.push(
+    { label: '节点状态', topic: `agv/v1/c/+/cluster/nodes/${nodeId}/get_status` },
+    { label: '检测结果', topic: `agv/v1/c/+/cluster/nodes/${nodeId}/camera/get_result` },
+    { label: '相机启动响应', topic: `agv/v1/c/+/cluster/nodes/${nodeId}/camera/start` },
+    { label: '相机停止响应', topic: `agv/v1/c/+/cluster/nodes/${nodeId}/camera/stop` },
+    { label: 'WebRTC Offer', topic: `agv/v1/c/+/cluster/nodes/${nodeId}/camera/webrtc/create_offer` },
+    { label: 'WebRTC Answer', topic: `agv/v1/c/+/cluster/nodes/${nodeId}/camera/webrtc/set_answer` },
+    { label: 'WebRTC Stop', topic: `agv/v1/c/+/cluster/nodes/${nodeId}/camera/webrtc/stop` },
+    { label: '回溯开启响应', topic: `agv/v1/c/+/cluster/nodes/${nodeId}/camera/record/start` },
+    { label: '回溯关闭响应', topic: `agv/v1/c/+/cluster/nodes/${nodeId}/camera/record/stop` },
+    { label: '抓取开启响应', topic: `agv/v1/c/+/cluster/nodes/${nodeId}/camera/capture/start` },
+    { label: '抓取关闭响应', topic: `agv/v1/c/+/cluster/nodes/${nodeId}/camera/capture/stop` },
+    { label: '遮蔽开启响应', topic: `agv/v1/c/+/cluster/nodes/${nodeId}/camera/shield/start` },
+    { label: '遮蔽关闭响应', topic: `agv/v1/c/+/cluster/nodes/${nodeId}/camera/shield/stop` },
+    { label: '更新相机配置响应', topic: `agv/v1/c/+/cluster/nodes/${nodeId}/update_camera_config` },
+    { label: '更新区域配置响应', topic: `agv/v1/c/+/cluster/nodes/${nodeId}/update_area_config` },
+    { label: '隐私模式响应', topic: `agv/v1/c/+/cluster/nodes/update_showmode` },
+    { label: '重启节点响应', topic: `agv/v1/c/+/cluster/nodes/${nodeId}/restart_node` },
+    { label: '节点注册广播', topic: `agv/v1/b/cluster/nodes/register` },
+    { label: '事件推送', topic: `vision/v1/b/event` },
+    { label: '线库位列表', topic: `vision/v1/b/linesBinList` },
+    { label: '存储位列表', topic: `vision/v1/b/storageList` },
+    { label: '安全区域列表', topic: `vision/v1/b/controlledAreaList` },
+    { label: '全部广播(#)', topic: `agv/v1/b/#` },
+    { label: '全部响应(#)', topic: `agv/v1/c/#` },
+    { label: '全部请求(#)', topic: `agv/v1/s/#` },
+  );
+  renderPresetTopics();
+  renderPublishPresets();
+}
+
+function renderPresetTopics() {
+  const container = document.getElementById('presetTopics');
+  container.innerHTML = '';
+  PRESET_TOPICS.forEach(p => {
+    const chip = document.createElement('span');
+    chip.className = 'preset-chip';
+    chip.textContent = p.label;
+    chip.title = p.topic;
+    chip.addEventListener('click', () => {
+      if (subscribedTopics.has(p.topic)) {
+        showToast('已订阅该 Topic', 'warning');
+        return;
+      }
+      document.getElementById('topicInput').value = p.topic;
+      subscribeTopic();
+    });
+    container.appendChild(chip);
+  });
+}
+
+function renderPublishPresets() {
+  const container = document.getElementById('publishPresets');
+  if (!container) return;
+  container.innerHTML = '';
+
+  PUBLISH_PRESETS.forEach(preset => {
+    const nodeId = document.getElementById('nodeId').value || 'node_1';
+    const topic = reqTopic(preset.topicPath(nodeId));
+    const item = document.createElement('div');
+    item.className = 'publish-preset';
+    item.title = topic;
+
+    const name = document.createElement('span');
+    name.className = 'publish-preset-name';
+    name.textContent = preset.label;
+
+    const actions = document.createElement('span');
+    actions.className = 'publish-preset-actions';
+
+    const fillBtn = document.createElement('button');
+    fillBtn.type = 'button';
+    fillBtn.className = 'btn btn-secondary btn-sm';
+    fillBtn.textContent = '填入';
+    fillBtn.addEventListener('click', () => applyPublishPreset(preset, false));
+
+    const sendBtn = document.createElement('button');
+    sendBtn.type = 'button';
+    sendBtn.className = 'btn btn-primary btn-sm';
+    sendBtn.textContent = '发布';
+    sendBtn.addEventListener('click', () => applyPublishPreset(preset, true));
+
+    actions.appendChild(fillBtn);
+    actions.appendChild(sendBtn);
+    item.appendChild(name);
+    item.appendChild(actions);
+    container.appendChild(item);
+  });
+}
+
+function applyPublishPreset(preset, publishNow = false) {
+  const nodeId = document.getElementById('nodeId').value || 'node_1';
+  const topic = reqTopic(preset.topicPath(nodeId));
+  const canPublish = publishNow && mqttClient && mqttClient.connected;
+  const envelope = buildEnvelope(preset.payload(), { consumeSeq: canPublish });
+  const payloadStr = JSON.stringify(envelope, null, 2);
+
+  document.getElementById('pubTopic').value = topic;
+  document.getElementById('pubPayload').value = payloadStr;
+  document.getElementById('pubFreq').value = '0';
+
+  if (publishNow) {
+    publishPayload(topic, JSON.stringify(envelope));
+  } else {
+    showToast(`已填入: ${preset.label}`, 'info');
+  }
+}
+
+// ================================================================
+//  联通测试（内联显示结果）
+// ================================================================
+async function testConnection() {
+  const panel = document.getElementById('connTestPanel');
+  const results = document.getElementById('connTestResults');
+  panel.classList.add('visible');
+
+  const host = normalizeMqttHost(document.getElementById('mqttHost').value);
+  const port = document.getElementById('mqttPort').value || '9001';
+
+  results.innerHTML = `
+    <div class="conn-test-result"><span class="dot pending"></span> 正在测试 MQTT Broker ${host}:${port} ...</div>
+  `;
+
+  // 尝试通过后端测试接口测试
+  try {
+    const res = await fetch('/api/config/glob/test_mqtt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uri: host, port: parseInt(port, 10) })
+    });
+    const data = await res.json();
+
+    if (data.ok || data.reachable) {
+      results.innerHTML = `
+        <div class="conn-test-result"><span class="dot ok"></span> MQTT Broker ${host}:${port} 联通成功</div>
+      `;
+    } else {
+      results.innerHTML = `
+        <div class="conn-test-result"><span class="dot fail"></span> MQTT Broker ${host}:${port} 不可达: ${data.msg || data.error || '连接失败'}</div>
+      `;
+    }
+  } catch (err) {
+    // 后端接口不可用，尝试直接通过 WebSocket 测试
+    results.innerHTML = `
+      <div class="conn-test-result"><span class="dot pending"></span> 通过 WebSocket 直连测试...</div>
+    `;
+    testConnectionDirect(host, port, results);
+  }
+}
+
+function testConnectionDirect(host, port, resultsEl) {
+  const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const url = `${scheme}://${host}:${port}`;
+  const testId = 'test_' + Math.random().toString(36).slice(2, 8);
+
+  const testClient = mqtt.connect(url, {
+    clientId: testId,
+    clean: true,
+    connectTimeout: 5000,
+    reconnectPeriod: 0,
+  });
+
+  const timeout = setTimeout(() => {
+    testClient.end(true);
+    resultsEl.innerHTML = `
+      <div class="conn-test-result"><span class="dot fail"></span> MQTT Broker ${host}:${port} 连接超时 (5s)</div>
+    `;
+  }, 5000);
+
+  testClient.on('connect', () => {
+    clearTimeout(timeout);
+    testClient.end(true);
+    resultsEl.innerHTML = `
+      <div class="conn-test-result"><span class="dot ok"></span> MQTT Broker ${host}:${port} (WebSocket) 联通成功</div>
+    `;
+  });
+
+  testClient.on('error', (err) => {
+    clearTimeout(timeout);
+    testClient.end(true);
+    resultsEl.innerHTML = `
+      <div class="conn-test-result"><span class="dot fail"></span> MQTT Broker ${host}:${port} 连接失败: ${err.message}</div>
+    `;
+  });
+}
+
+// ================================================================
+//  MQTT 连接
+// ================================================================
+function doConnect() {
+  if (mqttClient && mqttClient.connected) return;
+
+  const host = normalizeMqttHost(document.getElementById('mqttHost').value);
+  const port = document.getElementById('mqttPort').value || '9001';
+  const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const url = `${scheme}://${host}:${port}`;
+
+  clientId = 'bevp_sub_' + Math.random().toString(36).slice(2, 8);
+  seqNum = 1;
+
+  setConnState('connecting');
+
+  mqttClient = mqtt.connect(url, {
+    clientId,
+    clean: true,
+    reconnectPeriod: 3000,
+  });
+
+  mqttClient.on('connect', () => {
+    setConnState('connected');
+    subscribedTopics.forEach(t => mqttClient.subscribe(t, { qos: 0 }));
+    subscribeWebRTCTopics();
+    // 连接后自动获取可用相机
+    fetchAvailableCameras();
+  });
+
+  mqttClient.on('message', onMqttMessage);
+  mqttClient.on('close', () => setConnState('disconnected'));
+  mqttClient.on('error', () => setConnState('error'));
+}
+
+function doDisconnect() {
+  stopPeriodicPub();
+  if (mqttClient) {
+    mqttClient.end(true);
+    mqttClient = null;
+  }
+  clientId = '';
+  viewers.forEach((v, id) => closeViewer(id));
+  viewers.clear();
+  renderVideoGrid();
+  setConnState('disconnected');
+}
+
+function setConnState(state) {
+  const dot = document.getElementById('connDot');
+  const status = document.getElementById('connStatus');
+  const btnConn = document.getElementById('btnConnect');
+  const btnDisc = document.getElementById('btnDisconnect');
+
+  dot.className = 'conn-dot';
+  switch (state) {
+    case 'connected':
+      dot.classList.add('connected');
+      status.textContent = 'MQTT 已连接';
+      btnConn.style.display = 'none';
+      btnDisc.style.display = '';
+      break;
+    case 'connecting':
+      status.textContent = '连接中...';
+      break;
+    case 'disconnected':
+      status.textContent = '未连接';
+      btnConn.style.display = '';
+      btnDisc.style.display = 'none';
+      break;
+    case 'error':
+      status.textContent = '连接失败';
+      btnConn.style.display = '';
+      btnDisc.style.display = 'none';
+      break;
+  }
+}
+
+// ================================================================
+//  获取可用相机
+// ================================================================
+function fetchAvailableCameras() {
+  loadCameraConnectivity();
+  if (!mqttClient || !mqttClient.connected) {
+    loadCameraConfig();
+    showToast('已刷新相机配置；连接 MQTT 后可更新运行状态', 'info');
+    return;
+  }
+
+  const nodeId = document.getElementById('nodeId').value || 'node_1';
+  // 订阅 get_status 和 create_offer 响应
+  const statusRespTopic = resTopic(`cluster/nodes/${nodeId}/get_status`);
+  mqttClient.subscribe(statusRespTopic, { qos: 0 });
+  mqttClient.subscribe(resTopic(`cluster/nodes/${nodeId}/camera/webrtc/create_offer`), { qos: 0 });
+
+  // 发送 get_status 请求，用于更新相机运行状态
+  mqttClient.publish(reqTopic(`cluster/nodes/${nodeId}/get_status`), JSON.stringify({
+    version: '1.0.1',
+    seq: String(seqNum++),
+    srcAddr: clientId,
+    payload: { __req_id__: 'req_status_' + Date.now() }
+  }));
+
+  // 参考 webrtc/public/app.js：不带 camera_id 时请求服务端返回所有可用 streams
+  mqttClient.publish(reqTopic(`cluster/nodes/${nodeId}/camera/webrtc/create_offer`), JSON.stringify({
+    version: '1.0.1',
+    seq: String(seqNum++),
+    srcAddr: clientId,
+    payload: { client_id: clientId },
+    ack: { code: 0 }
+  }));
+  showToast('正在刷新可用视频流...', 'info');
+}
+
+function updateCameraList(cameras) {
+  cameraStatusById.clear();
+  cameras.forEach(cam => {
+    if (cam && cam.camera_id !== undefined && cam.camera_id !== null) {
+      cameraStatusById.set(String(cam.camera_id), cam);
+    }
+  });
+  renderCameraList();
+}
+
+function normalizeIdKey(id) {
+  if (id === undefined || id === null) return '';
+  const text = String(id).trim();
+  const exactNum = parseInt(text, 10);
+  if (!Number.isNaN(exactNum) && String(exactNum) === text) return String(exactNum);
+  const match = text.match(/\d+/);
+  return match ? String(parseInt(match[0], 10)) : text;
+}
+
+function buildAvailableStreamKeySet() {
+  const keys = new Set();
+  availableStreams.forEach((stream, idx) => {
+    const streamId = stream.stream_id ?? stream.streamId ?? stream.camera_id ?? idx;
+    const cameraId = stream.camera_id ?? stream.cameraId ?? streamId;
+    [streamId, cameraId].forEach(id => {
+      const exact = String(id ?? '').trim();
+      const normalized = normalizeIdKey(id);
+      if (exact) keys.add(exact);
+      if (normalized) keys.add(normalized);
+    });
+  });
+  return keys;
+}
+
+function getCameraDisplayState(cam) {
+  const cameraState = String(cam.camera_state || 'ON').toUpperCase();
+  const cameraIp = cam.camera_ip || cam.ip || '';
+  const hasConnectivity = cameraIp && cameraConnectivityByIp.has(String(cameraIp));
+  const isReachable = hasConnectivity ? cameraConnectivityByIp.get(String(cameraIp)) : false;
+  const isAvailableStream = !!cam.from_stream;
+
+  if (cameraState === 'OFF') {
+    return { className: 'camera-disabled', label: '未启动', icon: '●', cameraState, cameraIp };
+  }
+  if (isReachable || isAvailableStream) {
+    return { className: 'camera-ok', label: '联通', icon: '●', cameraState, cameraIp };
+  }
+  return { className: 'camera-offline', label: hasConnectivity ? '断线' : '未联通', icon: '●', cameraState, cameraIp };
+}
+
+function renderCameraList() {
+  const section = document.getElementById('cameraListSection');
+  const container = document.getElementById('cameraList');
+  const title = document.getElementById('cameraListTitle');
+  const configuredById = new Map(configuredCameras.map(cam => [String(cam.camera_id), cam]));
+  const configuredByNormalizedId = new Map(configuredCameras.map(cam => [normalizeIdKey(cam.camera_id), cam]));
+  const availableStreamKeys = buildAvailableStreamKeySet();
+  const streamCameras = availableStreams
+    .map((stream, idx) => {
+      const streamId = stream.stream_id ?? stream.streamId ?? stream.camera_id ?? idx;
+      const cameraId = stream.camera_id ?? stream.cameraId ?? streamId;
+      const configured = configuredById.get(String(cameraId))
+        || configuredByNormalizedId.get(normalizeIdKey(cameraId))
+        || configuredByNormalizedId.get(normalizeIdKey(streamId))
+        || {};
+      return {
+        ...configured,
+        ...stream,
+        camera_id: configured.camera_id ?? cameraId,
+        camera_ip: stream.camera_ip || stream.ip || configured.camera_ip || configured.ip || '',
+        stream_id: streamId,
+        from_stream: true,
+      };
+    })
+    .filter(cam => cam.camera_id !== undefined && cam.camera_id !== null);
+  const cameras = streamCameras.length > 0
+    ? streamCameras
+    : (configuredCameras.length > 0
+      ? configuredCameras
+      : Array.from(cameraStatusById.values()).sort((a, b) => Number(a.camera_id) - Number(b.camera_id)));
+
+  if (cameras.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  const countCameras = configuredCameras.length > 0 ? configuredCameras : cameras;
+  const stateCounts = countCameras.reduce((acc, cam) => {
+    const displayCam = {
+      ...cam,
+      from_stream: !!(
+        cam.from_stream
+        || availableStreamKeys.has(String(cam.camera_id ?? '').trim())
+        || availableStreamKeys.has(normalizeIdKey(cam.camera_id))
+      )
+    };
+    const state = getCameraDisplayState(displayCam);
+    if (state.className === 'camera-ok') acc.ok += 1;
+    else if (state.className === 'camera-disabled') acc.disabled += 1;
+    else acc.offline += 1;
+    return acc;
+  }, { ok: 0, offline: 0, disabled: 0 });
+  title.textContent = `可用相机/视频流（流 ${availableStreams.length} 路，配置 ${configuredCameras.length || cameras.length} 个，联通 ${stateCounts.ok}，断线 ${stateCounts.offline}，未启动 ${stateCounts.disabled}）`;
+  container.innerHTML = '';
+
+  cameras.forEach(cam => {
+    const chip = document.createElement('span');
+    chip.className = 'camera-chip';
+    chip.dataset.cameraId = cam.camera_id;
+    const status = cameraStatusById.get(String(cam.camera_id));
+    const merged = { ...cam, ...(status || {}) };
+
+    if (viewers.has(String(cam.camera_id))) {
+      chip.classList.add('streaming');
+    }
+
+    const displayState = getCameraDisplayState(merged);
+    chip.classList.add(displayState.className);
+    chip.textContent = `${displayState.icon} ${cam.from_stream ? '流' : '相机'} ${cam.camera_id} ${displayState.label}`;
+    chip.title = `stream: ${merged.stream_id || '--'} | IP: ${displayState.cameraIp || '--'} | 配置: ${displayState.cameraState || '--'} | 联通: ${displayState.label} | 运行状态: ${merged.status_message || merged.status || '--'}`;
+
+    chip.addEventListener('click', () => {
+      const id = String(cam.camera_id);
+      if (viewers.has(id)) {
+        closeViewer(id);
+        viewers.delete(id);
+        renderVideoGrid();
+        updateCameraChipStates();
+      } else {
+        document.getElementById('cameraIdInput').value = id;
+        subscribeVideo();
+      }
+    });
+
+    container.appendChild(chip);
+  });
+}
+
+function updateCameraChipStates() {
+  document.querySelectorAll('.camera-chip').forEach(chip => {
+    const id = chip.dataset.cameraId;
+    chip.classList.toggle('streaming', viewers.has(id));
+  });
+}
+
+// ================================================================
+//  WebRTC 视频流
+// ================================================================
+function subscribeWebRTCTopics() {
+  if (!mqttClient || !mqttClient.connected) return;
+  const nodeId = document.getElementById('nodeId').value || 'node_1';
+  mqttClient.subscribe(resTopic(`cluster/nodes/${nodeId}/camera/webrtc/create_offer`), { qos: 0 });
+  mqttClient.subscribe(resTopic(`cluster/nodes/${nodeId}/camera/webrtc/set_answer`), { qos: 0 });
+}
+
+function subscribeVideo() {
+  if (!mqttClient || !mqttClient.connected) {
+    showToast('请先连接 MQTT', 'error');
+    return;
+  }
+
+  const input = document.getElementById('cameraIdInput').value.trim();
+  if (!input) {
+    showToast('请输入相机ID', 'error');
+    return;
+  }
+
+  const cameraIds = input.split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(normalizeCameraOrStreamId);
+  if (cameraIds.length === 0) {
+    showToast('无效的相机ID', 'error');
+    return;
+  }
+
+  const nodeId = document.getElementById('nodeId').value || 'node_1';
+  const topic = reqTopic(`cluster/nodes/${nodeId}/camera/webrtc/create_offer`);
+
+  const payload = {
+    version: '1.0.1',
+    seq: String(seqNum++),
+    srcAddr: clientId,
+    payload: {
+      client_id: clientId,
+      camera_id: cameraIds
+    },
+    ack: { code: 0 }
+  };
+
+  mqttClient.publish(topic, JSON.stringify(payload));
+  showToast(`正在订阅相机 ${cameraIds.join(',')}...`, 'info');
+}
+
+function stopAllVideo() {
+  viewers.forEach((v, id) => closeViewer(id));
+  viewers.clear();
+  renderVideoGrid();
+  updateCameraChipStates();
+}
+
+function closeViewer(streamId) {
+  const viewer = viewers.get(streamId);
+  if (!viewer) return;
+  if (viewer.pc) viewer.pc.close();
+  if (viewer.statsTimer) clearInterval(viewer.statsTimer);
+}
+
+async function createViewerFromOffer(offer) {
+  const streamId = String(offer.stream_id ?? offer.camera_id ?? '');
+  const sdp = offer.offer || offer.sdp;
+  const candidates = offer.session_id || [];
+
+  if (!streamId || !sdp) {
+    showToast(`offer 字段缺失: stream_id=${streamId || '--'}`, 'error');
+    return;
+  }
+
+  if (viewers.has(streamId)) closeViewer(streamId);
+
+  const pc = new RTCPeerConnection({ iceServers: [] });
+
+  const video = document.createElement('video');
+  video.autoplay = true;
+  video.muted = true;
+  video.playsInline = true;
+
+  const viewer = { pc, video, streamId, state: 'connecting' };
+  viewers.set(streamId, viewer);
+  renderVideoGrid();
+  updateCameraChipStates();
+
+  pc.ontrack = (e) => {
+    video.srcObject = (e.streams && e.streams[0]) ? e.streams[0] : new MediaStream([e.track]);
+    viewer.state = 'connected';
+    renderVideoGrid();
+    updateCameraChipStates();
+  };
+
+  pc.onconnectionstatechange = () => {
+    viewer.state = pc.connectionState;
+    renderVideoGrid();
+    updateCameraChipStates();
+  };
+
+  try {
+    await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp }));
+
+    if (Array.isArray(candidates)) {
+      for (const c of candidates) {
+        if (!c || !c.candidate) continue;
+        await pc.addIceCandidate(new RTCIceCandidate({
+          candidate: c.candidate,
+          sdpMid: c.sdpMid || '0',
+          sdpMLineIndex: c.sdpMLineIndex || 0
+        }));
+      }
+    }
+
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    await new Promise((resolve) => {
+      if (pc.iceGatheringState === 'complete') return resolve();
+      const check = () => {
+        if (pc.iceGatheringState === 'complete') {
+          pc.removeEventListener('icegatheringstatechange', check);
+          resolve();
+        }
+      };
+      pc.addEventListener('icegatheringstatechange', check);
+      setTimeout(() => {
+        pc.removeEventListener('icegatheringstatechange', check);
+        resolve();
+      }, 3000);
+    });
+
+    const nodeId = document.getElementById('nodeId').value || 'node_1';
+    const numericMatch = streamId.match(/\d+/);
+    const cameraId = numericMatch ? parseInt(numericMatch[0], 10) : streamId;
+    const payload = {
+      version: '1.0.1',
+      seq: String(seqNum++),
+      srcAddr: clientId,
+      payload: {
+        client_id: clientId,
+        camera_id: cameraId,
+        answer: pc.localDescription.sdp
+      },
+      ack: { code: 0 }
+    };
+    mqttClient.publish(reqTopic(`cluster/nodes/${nodeId}/camera/webrtc/set_answer`), JSON.stringify(payload));
+    addMessage('send', reqTopic(`cluster/nodes/${nodeId}/camera/webrtc/set_answer`), JSON.stringify(payload));
+  } catch (err) {
+    viewer.state = 'failed';
+    renderVideoGrid();
+    showToast(`处理 ${streamId} offer 失败: ${err.message}`, 'error');
+  }
+}
+
+function renderVideoGrid() {
+  const grid = document.getElementById('videoGrid');
+
+  if (viewers.size === 0) {
+    grid.innerHTML = '<div class="empty-hint">连接 MQTT 后自动获取可用相机列表<br>输入相机ID或点击相机芯片订阅</div>';
+    return;
+  }
+
+  grid.innerHTML = '';
+  viewers.forEach((viewer, streamId) => {
+    const cell = document.createElement('div');
+    cell.className = 'video-cell';
+
+    const stateClass = viewer.state === 'connected' ? 'connected' :
+                       viewer.state === 'connecting' ? 'connecting' :
+                       viewer.state === 'failed' ? 'failed' : 'closed';
+
+    cell.innerHTML = `
+      <div class="label"><span class="state-dot ${stateClass}"></span>相机 ${streamId}</div>
+      <div class="stats">--</div>
+    `;
+    cell.insertBefore(viewer.video, cell.firstChild.nextSibling);
+    grid.appendChild(cell);
+  });
+}
+
+// ================================================================
+//  Topic 订阅
+// ================================================================
+function subscribeTopic() {
+  if (!mqttClient || !mqttClient.connected) {
+    showToast('请先连接 MQTT', 'error');
+    return;
+  }
+
+  const topic = document.getElementById('topicInput').value.trim();
+  if (!topic) {
+    showToast('请输入 Topic', 'error');
+    return;
+  }
+
+  if (subscribedTopics.has(topic)) {
+    showToast('已订阅该 Topic', 'warning');
+    return;
+  }
+
+  mqttClient.subscribe(topic, { qos: 0 }, (err) => {
+    if (err) {
+      showToast('订阅失败', 'error');
+    } else {
+      subscribedTopics.add(topic);
+      renderSubList();
+      document.getElementById('topicInput').value = '';
+      showToast('订阅成功: ' + topic, 'success');
+    }
+  });
+}
+
+function unsubscribeTopic(topic) {
+  if (mqttClient && mqttClient.connected) {
+    mqttClient.unsubscribe(topic);
+  }
+  subscribedTopics.delete(topic);
+  renderSubList();
+}
+
+function renderSubList() {
+  const container = document.getElementById('subList');
+
+  if (subscribedTopics.size === 0) {
+    container.innerHTML = '<div style="color:#555;font-size:12px;">暂无订阅</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  subscribedTopics.forEach(topic => {
+    const div = document.createElement('div');
+    div.className = 'sub-item';
+    div.innerHTML = `
+      <span class="sub-topic">${escapeHtml(topic)}</span>
+      <button class="btn-remove" title="取消订阅">✕</button>
+    `;
+    div.querySelector('.btn-remove').addEventListener('click', () => unsubscribeTopic(topic));
+    container.appendChild(div);
+  });
+}
+
+// ================================================================
+//  发布消息 & 周期发送
+// ================================================================
+function doPublish() {
+  const topic = document.getElementById('pubTopic').value.trim();
+  if (!topic) {
+    showToast('请输入发布 Topic', 'error');
+    return;
+  }
+
+  const payloadStr = document.getElementById('pubPayload').value.trim() || '{}';
+  const freq = parseInt(document.getElementById('pubFreq').value);
+
+  if (freq === 0) {
+    // 单次发送
+    publishPayload(topic, payloadStr);
+  } else {
+    // 周期发送
+    startPeriodicPub(topic, payloadStr, freq);
+  }
+}
+
+function publishPayload(topic, payloadStr) {
+  if (!mqttClient || !mqttClient.connected) {
+    showToast('请先连接 MQTT', 'error');
+    return false;
+  }
+  mqttClient.publish(topic, payloadStr);
+  addMessage('send', topic, payloadStr);
+  showToast('已发送', 'success');
+  return true;
+}
+
+function startPeriodicPub(topic, payloadStr, freq) {
+  stopPeriodicPub();
+
+  pubCount = 0;
+  const interval = Math.round(1000 / freq);
+
+  const badge = document.getElementById('freqBadge');
+  const badgeText = document.getElementById('freqText');
+  badge.style.display = 'inline-flex';
+  badge.classList.add('active');
+  badgeText.textContent = `${freq} Hz`;
+
+  document.getElementById('btnPublish').style.display = 'none';
+  document.getElementById('btnStopPub').style.display = '';
+
+  pubTimer = setInterval(() => {
+    if (!mqttClient || !mqttClient.connected) {
+      stopPeriodicPub();
+      return;
+    }
+    mqttClient.publish(topic, payloadStr);
+    pubCount++;
+    badgeText.textContent = `${freq} Hz (${pubCount})`;
+    addMessage('send', topic, payloadStr);
+  }, interval);
+
+  showToast(`开始 ${freq}Hz 周期发送到 ${topic}`, 'info');
+}
+
+function stopPeriodicPub() {
+  if (pubTimer) {
+    clearInterval(pubTimer);
+    pubTimer = null;
+  }
+
+  const badge = document.getElementById('freqBadge');
+  badge.style.display = 'none';
+  badge.classList.remove('active');
+
+  document.getElementById('btnPublish').style.display = '';
+  document.getElementById('btnStopPub').style.display = 'none';
+
+  if (pubCount > 0) {
+    showToast(`周期发送已停止，共发送 ${pubCount} 条`, 'info');
+    pubCount = 0;
+  }
+}
+
+// ================================================================
+//  消息处理
+// ================================================================
+function onMqttMessage(topic, msg) {
+  const raw = msg.toString();
+  let parsed = null;
+  try { parsed = JSON.parse(raw); } catch {}
+
+  const nodeId = document.getElementById('nodeId').value || 'node_1';
+
+  // 处理 get_status 响应 → 更新可用相机列表
+  const statusRespTopic = resTopic(`cluster/nodes/${nodeId}/get_status`);
+  if (topic === statusRespTopic && parsed) {
+    const payload = parsed.payload || parsed;
+    if (payload.camera_status && Array.isArray(payload.camera_status)) {
+      updateCameraList(payload.camera_status);
+    }
+  }
+
+  // 处理 WebRTC offer
+  const offerRespTopic = resTopic(`cluster/nodes/${nodeId}/camera/webrtc/create_offer`);
+  if (topic === offerRespTopic && parsed) {
+    const payload = parsed.payload || parsed;
+    availableStreams = (parsed.streams && parsed.streams.data && Array.isArray(parsed.streams.data))
+      ? parsed.streams.data
+      : [];
+    renderCameraList();
+
+    if (parsed.error) {
+      showToast(parsed.error, 'error');
+      return;
+    }
+
+    const offers = Array.isArray(payload.data) ? payload.data : [];
+    if (offers.length > 0) {
+      for (const offer of offers) {
+        createViewerFromOffer(offer);
+      }
+      showToast(`收到 ${offers.length} 路 offer，正在建立视频...`, 'success');
+    } else if (availableStreams.length > 0) {
+      showToast(`刷新到 ${availableStreams.length} 路可用视频流`, 'success');
+    } else {
+      showToast('未返回可用视频流', 'warning');
+    }
+    return;
+  }
+
+  // 记录用户订阅的 topic 消息
+  if (subscribedTopics.has(topic) || isTopicMatch(topic)) {
+    addMessage('recv', topic, raw);
+  }
+}
+
+function isTopicMatch(topic) {
+  for (const pattern of subscribedTopics) {
+    if (mqttTopicMatch(pattern, topic)) return true;
+  }
+  return false;
+}
+
+function mqttTopicMatch(pattern, topic) {
+  if (pattern === topic) return true;
+  if (pattern === '#') return true;
+
+  const patParts = pattern.split('/');
+  const topParts = topic.split('/');
+
+  for (let i = 0; i < patParts.length; i++) {
+    if (patParts[i] === '#') return true;
+    if (patParts[i] === '+') continue;
+    if (i >= topParts.length || patParts[i] !== topParts[i]) return false;
+  }
+
+  return patParts.length === topParts.length;
+}
+
+function addMessage(dir, topic, raw) {
+  msgCount++;
+  document.getElementById('msgCount').textContent = `消息: ${msgCount}`;
+
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('zh-CN', { hour12: false }) + '.' + String(now.getMilliseconds()).padStart(3, '0');
+
+  const entry = { dir, topic, raw, time: timeStr };
+  messageLog.push(entry);
+  if (messageLog.length > MAX_LOG) messageLog.shift();
+
+  renderMessageItem(entry);
+}
+
+function renderMessageItem(entry) {
+  const container = document.getElementById('msgLog');
+
+  const hint = container.querySelector('.empty-hint');
+  if (hint) hint.remove();
+
+  let prettyPayload = entry.raw;
+  try { prettyPayload = JSON.stringify(JSON.parse(entry.raw), null, 2); } catch {}
+
+  const dirIcon = entry.dir === 'send' ? '▲' : '▼';
+  const dirClass = entry.dir === 'send' ? 'send' : 'recv';
+
+  const div = document.createElement('div');
+  div.className = 'msg-item';
+  div.innerHTML = `
+    <span class="msg-time">${entry.time}</span>
+    <span class="msg-dir ${dirClass}">${dirIcon}</span>
+    <span class="msg-topic">${escapeHtml(entry.topic)}</span>
+    <span class="msg-payload">${escapeHtml(prettyPayload)}</span>
+  `;
+
+  div.addEventListener('click', () => div.classList.toggle('expanded'));
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function clearMessages() {
+  messageLog.length = 0;
+  msgCount = 0;
+  document.getElementById('msgCount').textContent = '消息: 0';
+  document.getElementById('msgLog').innerHTML = '<div class="empty-hint">订阅 Topic 后，收到的消息将显示在这里</div>';
+}
+
+// ================================================================
+//  工具函数
+// ================================================================
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function showToast(msg, type = 'info') {
+  const toast = document.createElement('div');
+  toast.style.cssText = `
+    position: fixed; bottom: 20px; right: 20px;
+    padding: 10px 16px; border-radius: 8px; font-size: 13px;
+    color: #fff; z-index: 9999; animation: fadeIn 0.3s ease;
+  `;
+  toast.style.background = type === 'success' ? '#2ecc71' :
+                           type === 'error' ? '#e74c3c' :
+                           type === 'warning' ? '#f39c12' : '#3498db';
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, 2500);
+}
+
+// ================================================================
+//  初始化
+// ================================================================
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('embedded') === '1') document.body.classList.add('embedded');
+  if (params.get('mqttHost')) document.getElementById('mqttHost').value = params.get('mqttHost');
+  if (params.get('mqttPort')) document.getElementById('mqttPort').value = params.get('mqttPort');
+  if (params.get('nodeId')) document.getElementById('nodeId').value = params.get('nodeId');
+
+  // 事件绑定
+  document.getElementById('btnLoadConfig').addEventListener('click', loadGlobConfig);
+  document.getElementById('btnConnect').addEventListener('click', doConnect);
+  document.getElementById('btnDisconnect').addEventListener('click', doDisconnect);
+  document.getElementById('btnTestConn').addEventListener('click', testConnection);
+  document.getElementById('btnSubscribeVideo').addEventListener('click', subscribeVideo);
+  document.getElementById('btnRefreshStreams').addEventListener('click', fetchAvailableCameras);
+  document.getElementById('btnStopAllVideo').addEventListener('click', stopAllVideo);
+  document.getElementById('btnSubscribeTopic').addEventListener('click', subscribeTopic);
+  document.getElementById('btnClearMsgs').addEventListener('click', clearMessages);
+  document.getElementById('btnPublish').addEventListener('click', doPublish);
+  document.getElementById('btnStopPub').addEventListener('click', stopPeriodicPub);
+
+  // 回车快捷键
+  document.getElementById('topicInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') subscribeTopic();
+  });
+  document.getElementById('cameraIdInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') subscribeVideo();
+  });
+  document.getElementById('httpCameraIdInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') httpPullStreams();
+  });
+  document.getElementById('nodeId').addEventListener('change', () => {
+    updatePresetTopics(document.getElementById('nodeId').value || 'node_1');
+  });
+
+  // 自动加载配置并生成预设
+  loadGlobConfig();
+
+  // 动态计算 header 高度并设置 padding
+  const adjustPadding = () => {
+    const h = document.getElementById('headerBar').offsetHeight;
+    document.querySelector('.main-content').style.paddingTop = h + 'px';
+  };
+  adjustPadding();
+  window.addEventListener('resize', adjustPadding);
+  new MutationObserver(adjustPadding).observe(document.getElementById('headerBar'), { childList: true, subtree: true, attributes: true });
+});
+
+// ================================================================
+//  HTTP WebRTC 拉流（一键完成 subscribe → offer → createAnswer → sendAnswer）
+// ================================================================
+function getHttpBaseUrl() {
+  const host = document.getElementById('httpHost').value.trim() || document.getElementById('mqttHost').value.trim() || '127.0.0.1';
+  const port = document.getElementById('httpPort').value.trim() || '8488';
+  return `http://${host}:${port}`;
+}
+
+function showHttpResult(title, data, isError = false) {
+  const panel = document.getElementById('httpResultPanel');
+  const content = document.getElementById('httpResultContent');
+  panel.style.display = 'block';
+  const ts = new Date().toLocaleTimeString('zh-CN');
+  const color = isError ? '#e74c3c' : '#2ecc71';
+  const prefix = `[${ts}] ${title}\n`;
+  const body = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  content.innerHTML = `<span style="color:${color};font-weight:600;">${prefix}</span>${body}`;
+}
+
+async function httpPost(path, body) {
+  const url = getHttpBaseUrl() + path;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = text; }
+    return { ok: res.ok, status: res.status, data };
+  } catch (err) {
+    return { ok: false, status: 0, data: null, error: err.message };
+  }
+}
+
+// 存储 HTTP 拉流创建的 viewer，用于停止
+// 从 HTTP 拉流区域的相机ID输入框解析
+function getHttpCameraIds() {
+  const input = document.getElementById('httpCameraIdInput').value.trim();
+  if (!input) {
+    // 未填相机ID时，默认使用全部已配置相机
+    if (configuredCameras.length > 0) {
+      return configuredCameras
+        .filter(cam => cam && cam.camera_id !== undefined && cam.camera_id !== null)
+        .map(cam => normalizeCameraOrStreamId(cam.camera_id));
+    }
+    // 如果也没有配置相机列表，回退到 availableStreams
+    if (availableStreams.length > 0) {
+      return availableStreams.map(s => normalizeCameraOrStreamId(
+        s.camera_id ?? s.cameraId ?? s.stream_id ?? s.streamId
+      ));
+    }
+    return [];
+  }
+  return input.split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(normalizeCameraOrStreamId);
+}
+
+let _httpViewers = new Map();
+
+async function httpPullStreams() {
+  const cameraIds = getHttpCameraIds();
+  if (cameraIds.length === 0) {
+    showToast('无可用相机ID（请先加载配置或手动输入）', 'error');
+    return;
+  }
+
+  const cid = clientId || 'http_' + Date.now().toString(36);
+  const statusEl = document.getElementById('httpStatus');
+  const btnEl = document.getElementById('btnHttpPull');
+  btnEl.disabled = true;
+  statusEl.textContent = '正在订阅...';
+
+  const body = { client_id: cid, camera_id: cameraIds };
+  showHttpResult('→ POST /api/webrtc/subscribe', body);
+
+  const result = await httpPost('/api/webrtc/subscribe', body);
+  if (result.error) {
+    showHttpResult('✗ Subscribe 失败', `连接失败: ${result.error}\n目标: ${getHttpBaseUrl()}/api/webrtc/subscribe`, true);
+    showToast('HTTP Subscribe 失败: ' + result.error, 'error');
+    btnEl.disabled = false;
+    statusEl.textContent = '失败';
+    return;
+  }
+
+  const offers = result.data?.offers?.data || [];
+  if (offers.length === 0) {
+    showHttpResult('✓ Subscribe 响应', result.data);
+    showToast('无可用流', 'error');
+    btnEl.disabled = false;
+    statusEl.textContent = '无流';
+    return;
+  }
+
+  showHttpResult(`✓ Subscribe 成功 (${offers.length} 路流)`, result.data);
+  showToast(`获取 ${offers.length} 个 offer，正在建立 WebRTC 连接...`, 'info');
+  statusEl.textContent = `正在建立 ${offers.length} 路连接...`;
+
+  let successCount = 0;
+  for (const offer of offers) {
+    try {
+      await createHttpViewer(offer, cid);
+      successCount++;
+    } catch (err) {
+      console.error(`[HTTP Pull] ${offer.stream_id} 失败:`, err);
+    }
+  }
+
+  statusEl.textContent = `已连接 ${successCount}/${offers.length} 路`;
+  btnEl.disabled = false;
+
+  if (successCount === 0) {
+    showToast('所有流连接失败', 'error');
+  } else {
+    showToast(`HTTP 拉流完成: ${successCount}/${offers.length} 路成功`, 'success');
+  }
+}
+
+async function createHttpViewer(offer, clientId) {
+  const streamId = String(offer.stream_id || '');
+  const sdp = offer.offer || '';
+  if (!streamId || !sdp) {
+    throw new Error(`offer 字段缺失: stream_id=${streamId || '--'}`);
+  }
+
+  // 关闭已有同 streamId 的 viewer
+  if (_httpViewers.has(streamId)) {
+    try { _httpViewers.get(streamId).pc.close(); } catch {}
+    _httpViewers.delete(streamId);
+  }
+  if (viewers.has(streamId)) {
+    closeViewer(streamId);
+    viewers.delete(streamId);
+  }
+
+  const pc = new RTCPeerConnection({ iceServers: [] });
+  const video = document.createElement('video');
+  video.autoplay = true;
+  video.muted = true;
+  video.playsInline = true;
+  video.setAttribute('playsinline', '');
+  // 先挂到 DOM 再设置 srcObject，避免部分浏览器不渲染
+  video.style.width = '100%';
+  video.style.height = '100%';
+
+  const viewer = { pc, video, streamId, state: 'connecting' };
+  _httpViewers.set(streamId, viewer);
+  viewers.set(streamId, viewer);
+  renderVideoGrid();
+  updateCameraChipStates();
+
+  // 收集远程 ICE candidates，等 setRemoteDescription 后再添加
+  const remoteCandidates = (offer.session_id || offer.candidates || [])
+    .filter(c => c && c.candidate);
+
+  // ontrack 必须在 setRemoteDescription 之前注册，否则可能错过事件
+  let trackResolve;
+  const trackPromise = new Promise(resolve => { trackResolve = resolve; });
+  let hasTrack = false;
+
+  pc.ontrack = (e) => {
+    hasTrack = true;
+    const stream = (e.streams && e.streams[0]) ? e.streams[0] : new MediaStream([e.track]);
+    video.srcObject = stream;
+    viewer.state = 'connected';
+    renderVideoGrid();
+    updateCameraChipStates();
+    trackResolve();
+  };
+
+  pc.onconnectionstatechange = () => {
+    viewer.state = pc.connectionState;
+    renderVideoGrid();
+    updateCameraChipStates();
+  };
+
+  try {
+    // 1. 设置远端 offer
+    await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp }));
+
+    // 2. 添加远程 ICE candidates
+    for (const c of remoteCandidates) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate({
+          candidate: c.candidate,
+          sdpMid: c.sdpMid || '0',
+          sdpMLineIndex: c.sdpMLineIndex || 0
+        }));
+      } catch {}
+    }
+
+    // 3. 创建 answer
+    const answerSdp = await pc.createAnswer();
+    await pc.setLocalDescription(answerSdp);
+
+    // 4. 等待 ICE gathering 完成（最多等 5 秒）
+    await new Promise((resolve) => {
+      if (pc.iceGatheringState === 'complete') return resolve();
+      const check = () => {
+        if (pc.iceGatheringState === 'complete') {
+          pc.removeEventListener('icegatheringstatechange', check);
+          resolve();
+        }
+      };
+      pc.addEventListener('icegatheringstatechange', check);
+      // 超时也要发，不能无限等
+      setTimeout(() => {
+        pc.removeEventListener('icegatheringstatechange', check);
+        resolve();
+      }, 5000);
+    });
+
+    // 5. 通过 HTTP 发送 answer（包含完整 ICE candidates）
+    const numericMatch = streamId.match(/\d+/);
+    const cameraId = numericMatch ? parseInt(numericMatch[0], 10) : streamId;
+    const answerBody = {
+      client_id: clientId,
+      camera_id: cameraId,
+      answer: pc.localDescription.sdp
+    };
+
+    const ansResult = await httpPost('/api/webrtc/answer', answerBody);
+    if (!ansResult.ok || !ansResult.data?.ok) {
+      showHttpResult(`✗ Answer 失败 (${streamId})`, ansResult.data || ansResult.error, true);
+      throw new Error(`answer failed for ${streamId}`);
+    }
+    showHttpResult(`✓ Answer 成功 (${streamId})`, ansResult.data);
+
+    // 6. 等待 track 到达（最多等 8 秒），超时不报错
+    const trackTimeout = new Promise(resolve => setTimeout(resolve, 8000));
+    await Promise.race([trackPromise, trackTimeout]);
+    if (!hasTrack) {
+      console.warn(`[HTTP Pull] ${streamId}: 等待视频轨道超时，可能无画面`);
+    }
+  } catch (err) {
+    viewer.state = 'failed';
+    renderVideoGrid();
+    updateCameraChipStates();
+    throw err;
+  }
+}
+
+async function httpStopStreams() {
+  const cameraIds = getHttpCameraIds();
+  const body = { camera_id: cameraIds };
+  const statusEl = document.getElementById('httpStatus');
+
+  showHttpResult('→ POST /api/webrtc/stop', body);
+  statusEl.textContent = '正在停止...';
+
+  const result = await httpPost('/api/webrtc/stop', body);
+  if (result.error) {
+    showHttpResult('✗ Stop 失败', `连接失败: ${result.error}`, true);
+    showToast('HTTP Stop 失败: ' + result.error, 'error');
+    statusEl.textContent = '停止失败';
+    return;
+  }
+
+  // 关闭所有 HTTP viewer
+  for (const [streamId, viewer] of _httpViewers) {
+    try { viewer.pc.close(); } catch {}
+    viewers.delete(streamId);
+  }
+  _httpViewers.clear();
+  renderVideoGrid();
+  updateCameraChipStates();
+
+  showHttpResult(`✓ Stop 成功`, result.data);
+  const stopped = result.data?.stopped ?? 0;
+  showToast(`HTTP 停止完成: ${stopped} 路流`, 'success');
+  statusEl.textContent = '已停止';
+}
+
+// 绑定按钮事件
+document.getElementById('btnHttpPull').addEventListener('click', httpPullStreams);
+document.getElementById('btnHttpStop').addEventListener('click', httpStopStreams);
+</script>
+</body>
+</html>

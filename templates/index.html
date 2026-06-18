@@ -1,0 +1,2305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BrightEyes 控制面板</title>
+<link rel="stylesheet" href="/static/css/bootstrap.min.css">
+<link rel="stylesheet" href="/static/css/bootstrap-icons.min.css">
+<link rel="stylesheet" href="/static/css/xterm.min.css">
+<script src="/static/js/chart.umd.min.js"></script>
+<script src="/static/js/xterm.min.js"></script>
+<script src="/static/js/xterm-addon-fit.min.js"></script>
+<style>
+  :root { --bg: #0f1117; --card: #1a1d27; --border: #2a2d3a; --accent: #4f8ef7; }
+  body { background: var(--bg); color: #e0e0e0; font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+  .fixed-top-shell { position: sticky; top: 0; z-index: 1040; background: var(--bg); box-shadow: 0 6px 18px rgba(0,0,0,.28); }
+  .navbar { background: var(--card) !important; border-bottom: 1px solid var(--border); }
+  .nav-tabs { border-color: var(--border); }
+  .nav-tabs .nav-link { color: #888; border: none; padding: .6rem 1.2rem; }
+  .nav-tabs .nav-link:hover { color: #ccc; background: rgba(255,255,255,.04); }
+  .nav-tabs .nav-link.active { color: var(--accent); background: transparent;
+    border-bottom: 2px solid var(--accent); }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+  .stat-card { border-radius: 10px; padding: 1rem 1.2rem; }
+  .stat-val { font-size: 1.8rem; font-weight: 700; }
+  .stat-label { font-size: .75rem; color: #888; }
+  .badge-run { background: #1db954; }
+  .badge-stop { background: #e74c3c; }
+  .log-area { background: #0a0c12; border: 1px solid var(--border); border-radius: 8px;
+    font-family: monospace; font-size: .8rem; color: #a0f0a0; padding: 1rem;
+    height: 320px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+  .json-editor { background: #0a0c12; border: 1px solid var(--border); color: #ddd;
+    font-family: monospace; font-size: .82rem; border-radius: 8px; resize: vertical; }
+  .json-editor:focus { border-color: var(--accent); box-shadow: none; outline: none; }
+  .form-control, .form-select { background: #0e1020; border-color: var(--border); color: #ddd; }
+  .form-control:focus, .form-select:focus { background: #0e1020; color: #ddd;
+    border-color: var(--accent); box-shadow: 0 0 0 2px rgba(79,142,247,.2); }
+  .form-label { color: #aaa; font-size: .85rem; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); }
+  .btn-primary:hover { background: #3a7ae0; border-color: #3a7ae0; }
+  .thread-table { font-size: .78rem; }
+  .thread-table th { color: #888; font-weight: 500; }
+  canvas { max-height: 120px; }
+  .lt-canvas { max-height: 160px !important; }
+  .lt-badge { font-size:.72rem; padding:.2rem .55rem; border-radius:8px; }
+  .section-title { font-size: .7rem; text-transform: uppercase; letter-spacing: 1px; color: #555;
+    margin-bottom: .5rem; }
+  .alert-mini { font-size: .82rem; padding: .4rem .8rem; }
+  #toastContainer { position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; }
+  .toast { background: var(--card); border: 1px solid var(--border); min-width: 260px; }
+  .cfg-group { background: #141826; border: 1px solid #242a3b; border-radius: 10px; padding: .9rem; }
+  .cfg-group-title { font-size: .78rem; color: #8da2c8; margin-bottom: .6rem; letter-spacing: .5px; }
+  .cfg-help { font-size: .75rem; color: #7e8599; margin-top: .2rem; }
+  .cfg-inline-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+  .cfg-mode { color: #8a90a3; font-size: .78rem; }
+  .path-browser-list { max-height: 320px; overflow-y: auto; border: 1px solid var(--border);
+    border-radius: 8px; background: #0c0f18; }
+  .path-browser-item { padding: .5rem .7rem; cursor: pointer; border-bottom: 1px solid #1b2030; }
+  .path-browser-item:hover { background: #1a2338; }
+  .path-browser-item:last-child { border-bottom: none; }
+  .path-meta { color: #7f88a3; font-size: .75rem; }
+  .subscription-frame { width: 100%; height: calc(100vh - 118px); min-height: 680px;
+    border: 1px solid var(--border); border-radius: 10px; background: #0b1118; }
+</style>
+</head>
+<body>
+
+<div class="fixed-top-shell">
+  <!-- Navbar -->
+  <nav class="navbar navbar-dark px-3 py-2">
+    <span class="navbar-brand mb-0 fw-bold">
+      <i class="bi bi-eye-fill text-primary me-2"></i>BRIGHTEYES SERVER 控制面板
+    </span>
+    <span id="clockDisplay" class="text-secondary small"></span>
+  </nav>
+
+  <!-- Tabs -->
+  <div class="container-fluid px-3 pt-3">
+    <ul class="nav nav-tabs mb-3" id="mainTabs">
+    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-process">
+      <i class="bi bi-cpu me-1"></i>进程管理</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-config">
+      <i class="bi bi-sliders me-1"></i>全局配置</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-camera">
+      <i class="bi bi-camera-video me-1"></i>相机配置</a></li>
+    <li class="nav-item"><a class="nav-link" id="tab-calib-link" data-bs-toggle="tab" href="#tab-calib">
+      <i class="bi bi-rulers me-1"></i>线库标定</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-model">
+      <i class="bi bi-box-arrow-in-down me-1"></i>模型转换</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-subscription">
+      <i class="bi bi-broadcast me-1"></i>订阅监控</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-terminal" id="tab-terminal-link">
+      <i class="bi bi-terminal me-1"></i>远程终端</a></li>
+    <li class="nav-item ms-auto"><a class="nav-link" data-bs-toggle="tab" href="#tab-settings">
+      <i class="bi bi-gear me-1"></i>路径设置</a></li>
+    </ul>
+  </div>
+</div>
+
+<div class="container-fluid px-3 pt-3">
+
+  <div class="tab-content">
+
+    <!-- ══════ 进程管理 ══════ -->
+    <div class="tab-pane fade show active" id="tab-process">
+      <div class="row g-3 mb-3">
+        <!-- 控制按钮 -->
+        <div class="col-12 col-md-3">
+          <div class="card h-100 p-3">
+            <div class="section-title">程序控制</div>
+            <div class="d-flex align-items-center mb-3 gap-2">
+              <span class="badge rounded-pill px-3 py-2 badge-stop" id="procBadge">未运行</span>
+              <span class="text-secondary small" id="procPid"></span>
+            </div>
+            <div class="d-grid gap-2">
+              <button class="btn btn-success btn-sm" id="btnStart" onclick="startProcess()">
+                <i class="bi bi-play-fill me-1"></i>启动程序</button>
+              <button class="btn btn-danger btn-sm" id="btnStop" onclick="stopProcess()">
+                <i class="bi bi-stop-fill me-1"></i>停止程序</button>
+              <button class="btn btn-warning btn-sm" onclick="restartMonitorService()">
+                <i class="bi bi-arrow-clockwise me-1"></i>重启监控服务</button>
+            </div>
+          </div>
+        </div>
+        <!-- 实时指标 -->
+        <div class="col-6 col-md-2">
+          <div class="card stat-card h-100">
+            <div class="section-title">CPU</div>
+            <div class="stat-val text-warning" id="statCpu">--</div>
+            <div class="stat-label">进程 %</div>
+            <div class="small mt-1" style="color:#888;">系统: <span id="statSysCpu">--</span> %</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-2">
+          <div class="card stat-card h-100">
+            <div class="section-title">内存 RSS</div>
+            <div class="stat-val text-info" id="statMem">--</div>
+            <div class="stat-label">进程 MB</div>
+            <div class="small mt-1" style="color:#888;">系统: <span id="statSysMem">--</span> %</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-2">
+          <div class="card stat-card h-100">
+            <div class="section-title">线程数</div>
+            <div class="stat-val text-primary" id="statThreads">--</div>
+            <div class="stat-label">进程线程</div>
+            <div class="small mt-1" style="color:#888;">系统: <span id="statSysThreads">--</span></div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card stat-card h-100">
+            <div class="section-title">系统网络</div>
+            <div class="small text-success">↓ <span id="statRx">--</span> KB/s</div>
+            <div class="small text-warning">↑ <span id="statTx">--</span> KB/s</div>
+            <div class="small mt-1" style="color:#7eb5e8;font-size:.7rem;">回环(lo): ↓ <span id="statLoRx">--</span> ↑ <span id="statLoTx">--</span> KB/s</div>
+            <div class="small text-secondary mt-1">连接数: <span id="statConns">--</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 图表 -->
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <div class="card p-3">
+            <div class="section-title">CPU 历史</div>
+            <canvas id="cpuChart"></canvas>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card p-3">
+            <div class="section-title">内存历史 (MB)</div>
+            <canvas id="memChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- 长期 CPU / 内存历史 -->
+      <div class="row g-3 mb-3">
+        <div class="col-12">
+          <div class="card p-3">
+            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+              <div class="d-flex align-items-center gap-2">
+                <span class="section-title mb-0">CPU / 内存 长期历史</span>
+                <span class="lt-badge bg-secondary text-white" id="ltRecordCount">-- 条</span>
+                <span class="lt-badge text-secondary" id="ltLatestTime" style="font-size:.68rem;"></span>
+              </div>
+              <div class="d-flex gap-2 flex-wrap align-items-center">
+                <span class="text-secondary" style="font-size:.72rem;">长期采样间隔:</span>
+                <select class="form-select form-select-sm" id="sCfgLtSampleInterval" onchange="saveLtSampleInterval()" style="width:auto;">
+                  <option value="120">2 分钟</option>
+                  <option value="300">5 分钟</option>
+                  <option value="600">10 分钟</option>
+                  <option value="1800">30 分钟</option>
+                  <option value="3600">1 小时</option>
+                  <option value="7200">2 小时</option>
+                </select>
+                <select class="form-select form-select-sm" id="ltRangeSelect" onchange="applyLtRange()" style="width:auto;">
+                  <option value="0">全部记录</option>
+                  <option value="48">最近 48 条</option>
+                  <option value="96">最近 96 条</option>
+                  <option value="240" selected>最近 240 条</option>
+                  <option value="480">最近 480 条</option>
+                </select>
+                <button class="btn btn-sm btn-outline-secondary" onclick="exportLtPng()" title="导出图片 PNG">
+                  <i class="bi bi-image me-1"></i>图片</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="exportLtCsv()" title="导出 CSV">
+                  <i class="bi bi-filetype-csv me-1"></i>CSV</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="exportLtJson()" title="导出 JSON">
+                  <i class="bi bi-braces me-1"></i>JSON</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="clearLtHistory()">
+                  <i class="bi bi-trash me-1"></i>清空</button>
+              </div>
+            </div>
+            <div class="row g-2">
+              <div class="col-md-6">
+                <div class="text-secondary mb-1" style="font-size:.72rem;">CPU %</div>
+                <canvas id="ltCpuChart" class="lt-canvas"></canvas>
+              </div>
+              <div class="col-md-6">
+                <div class="text-secondary mb-1" style="font-size:.72rem;">内存 RSS (MB)</div>
+                <canvas id="ltMemChart" class="lt-canvas"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GPU 监测 -->
+      <div class="row g-3 mb-3">
+        <div class="col-12">
+          <div class="card p-3">
+            <div class="section-title">GPU 状态</div>
+            <div id="gpuStatsContainer" class="row g-3">
+              <div class="text-secondary small">等待数据...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 线程列表 -->
+      <div class="card p-3 mb-3">
+        <div class="section-title">线程列表 (前20条)</div>
+        <div style="max-height:220px;overflow-y:auto;">
+          <table class="table table-dark table-sm thread-table mb-0">
+            <thead><tr><th>TID</th><th>用户时间 (s)</th><th>系统时间 (s)</th></tr></thead>
+            <tbody id="threadTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 程序输出日志 -->
+      <div class="card p-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="section-title mb-0">程序输出</span>
+          <div class="d-flex gap-2 align-items-center">
+            <div class="form-check form-switch form-check-inline mb-0">
+              <input class="form-check-input" type="checkbox" id="procLogAutoScroll" checked>
+              <label class="form-check-label small" for="procLogAutoScroll">自动滚动</label>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" onclick="clearProcLog()">
+              <i class="bi bi-trash me-1"></i>清空</button>
+          </div>
+        </div>
+        <div class="log-area" id="procLogArea" style="height:360px;">等待程序启动...</div>
+      </div>
+    </div>
+
+    <!-- ══════ 全局配置 ══════ -->
+    <div class="tab-pane fade" id="tab-config">
+      <div class="card p-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="section-title mb-0">glob_config.json 全局配置</span>
+          <div class="cfg-inline-actions">
+            <button class="btn btn-sm btn-outline-secondary" onclick="loadGlobConfig()">
+              <i class="bi bi-arrow-clockwise me-1"></i>重新加载</button>
+            <button class="btn btn-sm btn-primary" onclick="saveGlobConfig()">
+              <i class="bi bi-floppy me-1"></i>保存全局配置</button>
+            <button class="btn btn-sm btn-outline-info" onclick="exportGlobConfig()">
+              <i class="bi bi-download me-1"></i>导出配置</button>
+          </div>
+        </div>
+        <div id="configAlert" class="alert alert-mini d-none"></div>
+        <div id="globConfigSections" class="d-grid gap-3"></div>
+        <div class="text-secondary small mt-1">原始JSON模式已关闭；保存会自动创建 .bak 备份，导出配置用于下载当前 JSON。</div>
+      </div>
+    </div>
+
+    <!-- ══════ 相机配置 ══════ -->
+    <div class="tab-pane fade" id="tab-camera">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <div class="card p-3 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="section-title mb-0">相机列表</span>
+              <div class="cfg-inline-actions">
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadCameraConfig()">
+                  <i class="bi bi-arrow-clockwise"></i>
+                </button>
+              </div>
+            </div>
+            <div id="cameraAlert" class="alert alert-mini d-none mb-2"></div>
+            <!-- 相机联通监测开关 -->
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" id="cameraMonitorToggle" onchange="toggleCameraMonitor()">
+              <label class="form-check-label small" for="cameraMonitorToggle">实时联通监测</label>
+            </div>
+            <div style="max-height:420px;overflow-y:auto;">
+              <table class="table table-dark table-sm mb-0">
+                <thead>
+                  <tr><th>ID</th><th>IP</th><th>状态</th><th>联通</th></tr>
+                </thead>
+                <tbody id="cameraTableBody"></tbody>
+              </table>
+            </div>
+            <div class="d-grid gap-2 mt-3">
+              {# <button class="btn btn-sm btn-success" onclick="addCameraItem()">
+                <i class="bi bi-plus-circle me-1"></i>新增相机
+              </button>
+              <button class="btn btn-sm btn-danger" onclick="deleteCameraItem()">
+                <i class="bi bi-trash me-1"></i>删除当前相机
+              </button> #}
+              {# <button class="btn btn-sm btn-outline-info" onclick="applyFormToCurrentCamera()">
+                <i class="bi bi-check2-square me-1"></i>应用到当前相机
+              </button>
+              <button class="btn btn-sm btn-primary" onclick="saveCameraConfig()">
+                <i class="bi bi-floppy me-1"></i>保存相机配置
+              </button> #}
+            </div>
+          </div>
+        </div>
+        <div class="col-md-8">
+          <div class="card p-3">
+            <div class="section-title">相机参数</div>
+            <div class="row g-3">
+              <div class="col-md-4"><label class="form-label">camera_id (固定)</label><input id="camId" type="number" class="form-control" readonly></div>
+              <div class="col-md-4"><label class="form-label">camera_ip (固定)</label><input id="camIp" type="text" class="form-control" readonly></div>
+              <div class="col-md-4"><label class="form-label">camera_port (固定)</label><input id="camPort" type="text" class="form-control" readonly></div>
+
+              <div class="col-md-4"><label class="form-label">camera_user (固定)</label><input id="camUser" type="text" class="form-control" readonly></div>
+              <div class="col-md-4"><label class="form-label">camera_pwd (固定)</label><input id="camPwd" type="text" class="form-control" readonly></div>
+              <div class="col-md-4"><label class="form-label">camera_brand (固定)</label><input id="camBrand" type="text" class="form-control" readonly></div>
+
+              <div class="col-md-4"><label class="form-label">camera_function</label>
+                <select id="camFunction" class="form-select" readonly>
+                  <option value="StorageBinMonitor">StorageBinMonitor</option>
+                  <option value="GeneralMonitor">GeneralMonitor</option>
+                </select>
+              </div>
+              <div class="col-md-4"><label class="form-label">camera_model (固定)</label><input id="camModel" type="number" class="form-control" readonly></div>
+              <div class="col-md-4"><label class="form-label">camera_partition</label><input id="camPartition" type="text" class="form-control"></div>
+
+              <div class="col-md-4"><label class="form-label">camera_state</label>
+                <select id="camState" class="form-select">
+                  <option value="ON">ON</option>
+                  <option value="OFF">OFF</option>
+                </select>
+              </div>
+              <div class="col-md-8"><label class="form-label">camera_focal (固定)</label><input id="camFocal" type="text" class="form-control" readonly></div>
+
+              <div class="col-12"><label class="form-label">distortion_coeffs (JSON数组, 固定)</label><textarea id="camDistortion" class="form-control" rows="2" spellcheck="false" readonly></textarea></div>
+              <div class="col-12"><label class="form-label">intrinsic_matrix (JSON数组, 固定)</label><textarea id="camIntrinsic" class="form-control" rows="2" spellcheck="false" readonly></textarea></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ 线库标定 ══════ -->
+    <div class="tab-pane fade" id="tab-calib">
+      <div class="row justify-content-center">
+        <div class="col-md-8">
+          <div class="card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div class="section-title mb-0">线库标定程序</div>
+              <span id="calibBadge" class="badge bg-secondary">未运行</span>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">程序路径</label>
+              <input type="text" class="form-control" id="calibProg" readonly>
+            </div>
+
+            <div id="calibStatus" class="alert alert-mini d-none mb-3"></div>
+            <div class="d-flex gap-2 mb-3">
+              <button class="btn btn-success flex-fill" id="btnCalib" onclick="startCalib()">
+                <i class="bi bi-play-circle me-2"></i>打开标定程序
+              </button>
+              <button class="btn btn-danger flex-fill d-none" id="btnCalibStop" onclick="stopCalib()">
+                <i class="bi bi-stop-circle me-2"></i>关闭程序
+              </button>
+            </div>
+
+            <!-- 终端日志 -->
+            <div class="mb-1 d-flex justify-content-between align-items-center">
+              <span class="small text-secondary">终端日志</span>
+              <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="clearCalibLog()"
+                style="font-size:.72rem;">清空</button>
+            </div>
+            <pre id="calibLog" class="proc-log" style="height:260px;overflow-y:auto;font-size:.75rem;"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ 模型转换 ══════ -->
+    <div class="tab-pane fade" id="tab-model">
+      <div class="row g-3">
+        <div class="col-md-5">
+          <div class="card p-3">
+            <div class="section-title">转换参数</div>
+            <div class="mb-2">
+              <label class="form-label">输入 ONNX 文件路径</label>
+              <div class="input-group">
+                <input type="text" class="form-control" id="mInputFile"
+                  placeholder="/path/to/model.onnx">
+                <button class="btn btn-outline-secondary" type="button" onclick="openPathBrowser('input_file')">
+                  <i class="bi bi-folder2-open me-1"></i>选择文件
+                </button>
+              </div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">模型类型</label>
+              <select class="form-select" id="mModelType" onchange="onModelTypeChange()">
+                <option value="0" selected>yolov5 (0)</option>
+                <option value="4">yolov12 (4)</option>
+                <option value="5">yolo26 (5)</option>
+                <option value="6">dfine (6)</option>
+              </select>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">输出路径 (自动生成)</label>
+              <input type="text" class="form-control" id="mOutputFile" readonly>
+              <div class="cfg-help">自动生成: <code>base_dir/model/{类型}_model/best.trtmodel</code></div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">精度</label>
+              <select class="form-select" id="mPrecision">
+                <option value="1" selected>FP16 (推荐)</option>
+                <option value="0">FP32</option>
+              </select>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Batch Size</label>
+              <input type="number" class="form-control" id="mBatchSize" value="4" min="1" max="64">
+            </div>
+            <div class="mb-3 form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="mBackupEnabled">
+              <label class="form-check-label" for="mBackupEnabled">备份旧模型（关闭则直接删除旧模型）</label>
+            </div>
+            <div id="convAlert" class="alert alert-mini d-none mb-2"></div>
+            <div class="d-grid gap-2">
+              <button class="btn btn-primary" id="btnConvert" onclick="startConvert()">
+                <i class="bi bi-gear-wide-connected me-1"></i>开始转换</button>
+              <button class="btn btn-outline-danger" id="btnConvStop" onclick="stopConvert()" disabled>
+                <i class="bi bi-stop-circle me-1"></i>停止</button>
+            </div>
+          </div>
+          <!-- 类别文件编辑 -->
+          <div class="card p-3 mt-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="section-title mb-0">检测类别 (best.names)</span>
+              <button class="btn btn-sm btn-outline-secondary" onclick="loadModelNames()">
+                <i class="bi bi-arrow-clockwise me-1"></i>加载</button>
+            </div>
+            <div class="cfg-help mb-2">每行一个类别名称，对应当前选择的模型类型目录下的 best.names。</div>
+            <textarea class="form-control json-editor" id="mNamesEditor" rows="5"
+              spellcheck="false" placeholder="Goods&#10;Forklift&#10;Human"></textarea>
+            <div id="namesAlert" class="alert alert-mini d-none mt-2"></div>
+            <button class="btn btn-sm btn-primary mt-2" onclick="saveModelNames()">
+              <i class="bi bi-floppy me-1"></i>保存类别文件</button>
+          </div>
+        </div>
+        <div class="col-md-7">
+          <div class="card p-3 h-100 d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="section-title mb-0">转换日志</span>
+              <span id="convStatusBadge" class="badge bg-secondary">空闲</span>
+            </div>
+            <div class="log-area flex-grow-1" id="convLog"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ 路径设置 ══════ -->
+    <div class="tab-pane fade" id="tab-settings">
+      <div class="row justify-content-center">
+        <div class="col-md-8">
+          <div class="card p-4">
+            <div class="section-title mb-3">控制面板路径配置</div>
+            <div class="mb-2">
+              <label class="form-label">主程序启动命令</label>
+              <input type="text" class="form-control" id="sCfgCmd" placeholder="./VP_SERVER">
+              <div class="cfg-help">直接填写可执行程序，如 <code>./VP_SERVER</code>。控制面板会自动设置工作目录和 LD_LIBRARY_PATH，无需通过 run.sh 启动。</div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">主程序进程名 (用于查找进程)</label>
+              <input type="text" class="form-control" id="sCfgName" placeholder="VisionNavPlatform">
+            </div>
+            <div class="mb-2">
+              <label class="form-label">线库标定程序路径</label>
+              <input type="text" class="form-control" id="sCfgCalib" placeholder="/abs/path/calib">
+            </div>
+            <div class="mb-2">
+              <label class="form-label">模型转换程序路径</label>
+              <input type="text" class="form-control" id="sCfgConv" placeholder="/abs/path/onnx2trt">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">glob_config.json 路径</label>
+              <input type="text" class="form-control" id="sCfgGlob" placeholder="/abs/path/glob_config.json">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">camera_config.json 路径</label>
+              <input type="text" class="form-control" id="sCfgCamera" placeholder="/abs/path/camera_config.json">
+            </div>
+            <div class="section-title mt-3 mb-2">内存阈值自动拉起</div>
+            <div class="mb-2 form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="sCfgMemGuardEnabled">
+              <label class="form-check-label" for="sCfgMemGuardEnabled">启用内存守护（超限自动重启目标程序）</label>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">内存上限 (MB)</label>
+              <input type="number" class="form-control" id="sCfgMemLimit" min="1" step="1" placeholder="例如 4096">
+            </div>
+            <div class="mb-2">
+              <label class="form-label">检查周期 (秒)</label>
+              <input type="number" class="form-control" id="sCfgMemCheckSec" min="1" step="1" placeholder="例如 5">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">重启冷却时间 (秒)</label>
+              <input type="number" class="form-control" id="sCfgMemCooldownSec" min="5" step="1" placeholder="例如 30">
+            </div>
+            <div class="section-title mt-3 mb-2">开机自启管理</div>
+            <div class="mb-2 d-flex align-items-center gap-3">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="sCfgAutostart">
+                <label class="form-check-label" for="sCfgAutostart">目标程序开机自启</label>
+              </div>
+              <span class="badge bg-secondary" id="autostartBadge">未知</span>
+            </div>
+            <div class="cfg-help mb-2">启用后，服务器每次重启都会自动拉起目标程序（通过 systemd 服务管理）。</div>
+            <div class="d-flex gap-2 mb-3">
+              <button class="btn btn-sm btn-success" onclick="enableAutostart()">
+                <i class="bi bi-power me-1"></i>启用自启</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="disableAutostart()">
+                <i class="bi bi-x-circle me-1"></i>禁用自启</button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="refreshAutostartStatus()">
+                <i class="bi bi-arrow-clockwise me-1"></i>刷新状态</button>
+            </div>
+            <div class="section-title mt-3 mb-2">相机联通监测</div>
+            <div class="mb-2 form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="sCfgCameraMonitor">
+              <label class="form-check-label" for="sCfgCameraMonitor">启用后台相机联通监测</label>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">监测间隔 (秒)</label>
+              <input type="number" class="form-control" id="sCfgCameraMonitorSec" min="3" step="1" placeholder="例如 10">
+            </div>
+            <div class="section-title mt-3 mb-2">进程日志落盘</div>
+            <div class="mb-2 form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="sCfgProcLogPersistEnabled">
+              <label class="form-check-label" for="sCfgProcLogPersistEnabled">启用日志自动保存</label>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">落盘阈值 (行)</label>
+              <input type="number" class="form-control" id="sCfgProcLogLineThreshold" min="100" step="100" placeholder="例如 2000">
+              <div class="cfg-help">当缓存日志达到该行数时自动追加保存到当天日志文件。</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">日志保留天数</label>
+              <input type="number" class="form-control" id="sCfgProcLogCleanupDays" min="1" step="1" placeholder="例如 7">
+              <div class="cfg-help">每天清理一次，删除超过保留天数的历史日志。</div>
+            </div>
+            <div class="d-flex gap-2 mb-3">
+              <button class="btn btn-sm btn-outline-secondary" onclick="downloadPanelConfig()">
+                <i class="bi bi-file-earmark-text me-1"></i>下载配置文件</button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="openLogBrowser()">
+                <i class="bi bi-folder2-open me-1"></i>浏览日志文件</button>
+              <button class="btn btn-sm btn-outline-info" onclick="exportPanelLogs()">
+                <i class="bi bi-file-zip me-1"></i>压缩导出日志</button>
+            </div>
+            <div id="settingsAlert" class="alert alert-mini d-none mb-2"></div>
+            <button class="btn btn-primary" onclick="saveSettings()">
+              <i class="bi bi-floppy me-1"></i>保存设置</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ 订阅监控 ══════ -->
+    <div class="tab-pane fade" id="tab-subscription">
+      <iframe class="subscription-frame" id="subscriptionFrame" src="/subscription?embedded=1" title="订阅监控"></iframe>
+    </div>
+
+    <!-- ══════ 远程终端 ══════ -->
+    <div class="tab-pane fade" id="tab-terminal">
+      <div class="card p-3">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <button class="btn btn-sm btn-success" onclick="webTermCreate()">
+            <i class="bi bi-plus-lg me-1"></i>新建终端</button>
+          <button class="btn btn-sm btn-danger" onclick="webTermDestroy()">
+            <i class="bi bi-x-lg me-1"></i>关闭终端</button>
+          <span class="text-muted small ms-2" id="webTermStatus">未连接</span>
+        </div>
+        <div id="webTermContainer" style="width:100%;height:500px;background:#000;border-radius:6px;overflow:hidden;"></div>
+      </div>
+    </div>
+
+  </div><!-- tab-content -->
+</div><!-- container -->
+
+<!-- Toast容器 -->
+<div id="toastContainer"></div>
+
+<!-- 路径选择器 -->
+<div class="modal fade" id="pathBrowserModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content" style="background:#171b27;border:1px solid #2a2f40;">
+      <div class="modal-header border-0 pb-1">
+        <h6 class="modal-title" id="pathBrowserTitle">路径选择</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-1">
+        <div class="d-flex gap-2 mb-2">
+          <button class="btn btn-sm btn-outline-light" onclick="browseParentDir()">
+            <i class="bi bi-arrow-up"></i> 上一级
+          </button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="refreshPathBrowser()">
+            <i class="bi bi-arrow-clockwise"></i> 刷新
+          </button>
+          <input class="form-control form-control-sm" id="pathBrowserCwd" readonly>
+        </div>
+        <div class="path-browser-list" id="pathBrowserList"></div>
+        <div class="path-meta mt-2" id="pathBrowserHint"></div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 日志文件浏览器 Modal -->
+<div class="modal fade" id="logBrowserModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content" style="background:#171b27;border:1px solid #2a2f40;">
+      <div class="modal-header border-0 pb-1">
+        <h6 class="modal-title"><i class="bi bi-folder2-open me-1"></i>日志文件浏览</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-1">
+        <div class="d-flex gap-2 mb-2">
+          <button class="btn btn-sm btn-outline-light" onclick="logBrowserUp()">
+            <i class="bi bi-arrow-up"></i> 上一级
+          </button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="logBrowserRefresh()">
+            <i class="bi bi-arrow-clockwise"></i> 刷新
+          </button>
+          <input class="form-control form-control-sm" id="logBrowserCwd" readonly value="/">
+        </div>
+        <div style="max-height:400px;overflow-y:auto;" id="logBrowserList">
+          <div class="text-muted text-center py-3">加载中...</div>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="/static/js/bootstrap.bundle.min.js"></script>
+<script>
+// ─── 工具函数 ─────────────────────────────────────────────────────────────────
+function toast(msg, type='info') {
+  const id = 'toast_' + Date.now();
+  const color = type === 'success' ? 'text-success' : type === 'error' ? 'text-danger' : 'text-info';
+  const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'x-circle' : 'info-circle';
+  document.getElementById('toastContainer').insertAdjacentHTML('beforeend', `
+    <div id="${id}" class="toast show mb-2 p-2 ps-3 d-flex align-items-center gap-2">
+      <i class="bi bi-${icon} ${color}"></i>
+      <span class="small">${msg}</span>
+      <button type="button" class="btn-close btn-close-white ms-auto" onclick="document.getElementById('${id}').remove()"></button>
+    </div>`);
+  setTimeout(() => { const el = document.getElementById(id); if (el) el.remove(); }, 4000);
+}
+
+async function api(url, method='GET', body=null) {
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  return r.json();
+}
+
+// ─── 时钟 ─────────────────────────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('clockDisplay').textContent = new Date().toLocaleString('zh-CN');
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ─── 进程管理 ─────────────────────────────────────────────────────────────────
+const MAX_PTS = 60;
+const cpuData = Array(MAX_PTS).fill(0);
+const memData = Array(MAX_PTS).fill(0);
+
+function mkChart(id, label, color) {
+  const ctx = document.getElementById(id).getContext('2d');
+  return new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: Array(MAX_PTS).fill(''),
+      datasets: [{ label, data: [...(id==='cpuChart'?cpuData:memData)],
+        borderColor: color, backgroundColor: color+'22',
+        borderWidth: 1.5, pointRadius: 0, fill: true, tension: 0.3 }]
+    },
+    options: {
+      animation: false, responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { display: false },
+        y: { ticks: { color:'#888', font:{size:10} }, grid: { color:'#1e2030' },
+             min: 0 }
+      }
+    }
+  });
+}
+
+const cpuChart = mkChart('cpuChart', 'CPU %', '#f0ad4e');
+const memChart = mkChart('memChart', '内存 MB', '#5bc0de');
+
+function pushData(chart, arr, val) {
+  arr.push(val); arr.shift();
+  chart.data.datasets[0].data = [...arr];
+  chart.update('none');
+}
+
+// ─── 长期历史图表 ─────────────────────────────────────────────────────────────
+let _ltAllData = [];   // 后端返回的全量原始数据
+let _ltViewData = [];  // 当前按 rangeSelect 截取的视图数据
+let ltCpuChart, ltMemChart;
+
+function _ltFmtLabel(ts) {
+  const d = new Date(ts * 1000);
+  if (_ltViewData.length > 1) {
+    const span = _ltViewData[_ltViewData.length - 1].ts - _ltViewData[0].ts;
+    if (span > 86400) {
+      return (d.getMonth()+1+'').padStart(2,'0') + '-' +
+             (d.getDate()+'').padStart(2,'0') + ' ' +
+             (d.getHours()+'').padStart(2,'0') + ':' +
+             (d.getMinutes()+'').padStart(2,'0');
+    }
+  }
+  return (d.getHours()+'').padStart(2,'0') + ':' + (d.getMinutes()+'').padStart(2,'0');
+}
+
+function _mkLtChart(id, label1, color1, label2, color2) {
+  const ctx = document.getElementById(id).getContext('2d');
+  const datasets = [
+    { label: label1, data: [], borderColor: color1, backgroundColor: color1 + '20',
+      borderWidth: 1.5, pointRadius: 1.5, pointHoverRadius: 5, fill: false, tension: 0.3 }
+  ];
+  if (label2) datasets.push(
+    { label: label2, data: [], borderColor: color2, backgroundColor: color2 + '15',
+      borderWidth: 1.5, pointRadius: 1.5, pointHoverRadius: 5, fill: false,
+      tension: 0.3, borderDash: [5, 3] }
+  );
+  return new Chart(ctx, {
+    type: 'line',
+    data: { labels: [], datasets },
+    options: {
+      animation: false, responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { display: !!label2, labels: { color:'#aaa', font:{size:10}, boxWidth:20 } },
+        tooltip: {
+          callbacks: {
+            title: items => {
+              const r = _ltViewData[items[0].dataIndex];
+              return r ? new Date(r.ts * 1000).toLocaleString('zh-CN') : '';
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color:'#777', font:{size:9}, maxRotation:30, autoSkip:true, maxTicksLimit:10 },
+             grid: { color:'#1e2030' } },
+        y: { ticks: { color:'#888', font:{size:10} }, grid: { color:'#1e2030' }, min: 0 }
+      }
+    }
+  });
+}
+
+function _initLtCharts() {
+  ltCpuChart = _mkLtChart('ltCpuChart', '进程 CPU %', '#f0ad4e', '系统 CPU %', '#e06060');
+  ltMemChart = _mkLtChart('ltMemChart', '进程内存 MB', '#5bc0de', '系统内存 MB', '#5bd6a0');
+}
+
+function _renderLtCharts() {
+  const labels   = _ltViewData.map(r => _ltFmtLabel(r.ts));
+  const cpus     = _ltViewData.map(r => r.cpu);
+  const mems     = _ltViewData.map(r => r.mem);
+  const sysCpus  = _ltViewData.map(r => r.sys_cpu ?? null);
+  const sysMems  = _ltViewData.map(r => r.sys_mem ?? null);
+
+  ltCpuChart.data.labels = labels;
+  ltCpuChart.data.datasets[0].data = cpus;
+  if (ltCpuChart.data.datasets.length > 1) ltCpuChart.data.datasets[1].data = sysCpus;
+  ltCpuChart.update('none');
+
+  ltMemChart.data.labels = labels;
+  ltMemChart.data.datasets[0].data = mems;
+  if (ltMemChart.data.datasets.length > 1) ltMemChart.data.datasets[1].data = sysMems;
+  ltMemChart.update('none');
+
+  document.getElementById('ltRecordCount').textContent = _ltAllData.length + ' 条';
+  if (_ltViewData.length > 0) {
+    const latest = new Date(_ltViewData[_ltViewData.length - 1].ts * 1000);
+    document.getElementById('ltLatestTime').textContent = '最新: ' + latest.toLocaleString('zh-CN');
+  }
+}
+
+function applyLtRange() {
+  const n = parseInt(document.getElementById('ltRangeSelect').value) || 0;
+  _ltViewData = n > 0 ? _ltAllData.slice(-n) : _ltAllData.slice();
+  _renderLtCharts();
+}
+
+async function pollLtHistory() {
+  try {
+    const r = await api('/api/history/longterm');
+    if (Array.isArray(r.data)) {
+      _ltAllData = r.data;
+      applyLtRange();
+    }
+  } catch(_) {}
+}
+
+function exportLtPng() {
+  // 合并两张画布为一张 PNG 输出
+  const c1 = document.getElementById('ltCpuChart');
+  const c2 = document.getElementById('ltMemChart');
+  const W = c1.width + c2.width + 24, H = Math.max(c1.height, c2.height) + 44;
+  const combined = Object.assign(document.createElement('canvas'), { width: W, height: H });
+  const ctx = combined.getContext('2d');
+  ctx.fillStyle = '#1a1d27';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#aaa';
+  ctx.font = '11px sans-serif';
+  ctx.fillText('CPU / 内存长期历史  ' + new Date().toLocaleString('zh-CN'), 8, 16);
+  ctx.fillStyle = '#f0ad4e';
+  ctx.fillText('■ CPU %', 8, 30);
+  ctx.fillStyle = '#5bc0de';
+  ctx.fillText('■ 内存 MB', 70, 30);
+  ctx.drawImage(c1, 0, 40);
+  ctx.drawImage(c2, c1.width + 12, 40);
+  const a = document.createElement('a');
+  a.download = 'lt_history_' + new Date().toISOString().slice(0,16).replace(/[T:]/g,'-') + '.png';
+  a.href = combined.toDataURL('image/png');
+  a.click();
+}
+
+function exportLtCsv()  { window.location.href = '/api/history/longterm/export?fmt=csv';  }
+function exportLtJson() { window.location.href = '/api/history/longterm/export?fmt=json'; }
+
+async function clearLtHistory() {
+  if (!confirm('确认清空长期历史？此操作不可撤销。')) return;
+  const r = await api('/api/history/longterm/clear', 'POST');
+  toast(r.ok ? '长期历史已清空' : '清空失败', r.ok ? 'success' : 'error');
+  if (r.ok) { _ltAllData = []; _ltViewData = []; _renderLtCharts(); }
+}
+
+_initLtCharts();
+pollLtHistory();
+setInterval(pollLtHistory, 60000);  // 每60秒刷新一次
+
+function applyStats(s) {
+  const badge = document.getElementById('procBadge');
+  const pid   = document.getElementById('procPid');
+  if (s.running) {
+    badge.textContent = '运行中'; badge.className = 'badge rounded-pill px-3 py-2 badge-run';
+    const sourceLabel = s.source === 'external' ? '外部运行'
+      : s.source === 'managed-child' ? '控制面板启动/子进程'
+      : s.source === 'managed' ? '控制面板启动'
+      : '';
+    pid.textContent = sourceLabel ? `PID ${s.pid} · ${sourceLabel}` : `PID ${s.pid}`;
+    document.getElementById('statCpu').textContent = s.cpu_percent ?? '--';
+    document.getElementById('statMem').textContent = s.memory_rss_mb ?? '--';
+    document.getElementById('statThreads').textContent = s.threads ?? '--';
+    document.getElementById('statConns').textContent =
+      `${s.net_connections?.established ?? 0} 已连`;
+    pushData(cpuChart, cpuData, s.cpu_percent ?? 0);
+    pushData(memChart, memData, s.memory_rss_mb ?? 0);
+    // 线程表
+    const tbody = document.getElementById('threadTable');
+    tbody.innerHTML = (s.thread_list || []).map(t =>
+      `<tr><td>${t.id}</td><td>${t.user_time}</td><td>${t.system_time}</td></tr>`
+    ).join('') || '<tr><td colspan="3" class="text-secondary">无数据</td></tr>';
+  } else {
+    badge.textContent = '未运行'; badge.className = 'badge rounded-pill px-3 py-2 badge-stop';
+    pid.textContent = '';
+    ['statCpu','statMem','statThreads','statConns'].forEach(id =>
+      document.getElementById(id).textContent = '--');
+    document.getElementById('threadTable').innerHTML =
+      '<tr><td colspan="3" class="text-secondary">进程未运行</td></tr>';
+  }
+  if (s.net) {
+    document.getElementById('statRx').textContent = s.net.rx_kbps ?? '--';
+    document.getElementById('statTx').textContent = s.net.tx_kbps ?? '--';
+    document.getElementById('statLoRx').textContent = s.net.lo_rx_kbps ?? '--';
+    document.getElementById('statLoTx').textContent = s.net.lo_tx_kbps ?? '--';
+  }
+  if (s.sys) {
+    document.getElementById('statSysCpu').textContent = s.sys.sys_cpu_percent ?? '--';
+    document.getElementById('statSysMem').textContent = s.sys.sys_mem_percent ?? '--';
+    document.getElementById('statSysThreads').textContent = s.sys.sys_threads ?? '--';
+  }
+  if (s.gpu !== undefined) {
+    renderGpuStats(s.gpu);
+  }
+}
+
+// SSE 实时流
+function startStatsStream() {
+  const es = new EventSource('/api/stats/stream');
+  es.onmessage = e => {
+    try { applyStats(JSON.parse(e.data)); } catch(_) {}
+  };
+  es.onerror = () => { setTimeout(startStatsStream, 5000); es.close(); };
+}
+startStatsStream();
+
+async function startProcess() {
+  const r = await api('/api/process/start', 'POST');
+  toast(r.msg, r.ok ? 'success' : 'error');
+  if (r.ok) procLogOffset = 0;  // 重置偏移，准备接收新输出
+}
+async function stopProcess() {
+  if (!confirm('确认停止主程序？')) return;
+  const r = await api('/api/process/stop', 'POST');
+  toast(r.msg, r.ok ? 'success' : 'error');
+}
+async function restartMonitorService() {
+  if (!confirm('确认重启监控服务？重启期间控制面板将短暂不可用。')) return;
+  toast('正在重启监控服务...', 'info');
+  try {
+    const r = await api('/api/monitor/restart', 'POST');
+    toast(r.msg, r.ok ? 'success' : 'error');
+  } catch(e) {
+    // 服务重启后连接会断开，属正常现象
+    toast('监控服务正在重启，请稍后刷新页面', 'info');
+    setTimeout(() => location.reload(), 5000);
+  }
+}
+
+// ─── 程序输出日志 ─────────────────────────────────────────────────────────────
+let procLogOffset = 0;
+
+async function pollProcLog() {
+  try {
+    const r = await api(`/api/process/output?offset=${procLogOffset}`);
+    if (r.lines && r.lines.length > 0) {
+      const logEl = document.getElementById('procLogArea');
+      if (procLogOffset === 0) logEl.textContent = '';
+      for (const line of r.lines) {
+        logEl.textContent += line + '\n';
+      }
+      if (document.getElementById('procLogAutoScroll').checked) {
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+    }
+    if (r.offset !== undefined) {
+      if (r.offset < procLogOffset) {
+        // 日志已被清空（重启），重置显示
+        document.getElementById('procLogArea').textContent = '';
+      }
+      procLogOffset = r.offset;
+    }
+  } catch(_) {}
+}
+
+async function clearProcLog() {
+  await api('/api/process/output/clear', 'POST');
+  procLogOffset = 0;
+  document.getElementById('procLogArea').textContent = '';
+}
+
+setInterval(pollProcLog, 1500);
+
+// ─── 全局配置 ─────────────────────────────────────────────────────────────────
+let rawGlobConfig = null;
+let globFieldState = [];
+
+const GLOB_CONFIG_GROUPS = [
+  {
+    title: '基础运行',
+    fields: [
+      { path: 'node_id', label: '节点ID', type: 'text', desc: '当前节点唯一标识，建议保持稳定。' },
+      { path: 'log_level', label: '日志级别', type: 'int', defaultValue: 3, options: [1, 2, 3, 4, 5], desc: '日志级别选择 1-5，默认 3。' },
+      { path: 'run_model', label: '运行模式', type: 'select', options: ['online', 'offline'], desc: 'online在线模式，offline离线模式。' },
+      { path: 'offline_path', label: '离线路径', type: 'text', desc: '离线数据路径，仅offline模式使用。' },
+      { path: 'delay_time', label: '延迟时间', type: 'int', desc: '离线播放延迟参数，单位为1s。' },
+      { path: 'decode_gpu', label: 'GPU解码开关', type: 'int', options: [{ value: 0, label: '0(关闭)' }, { value: 1, label: '1(开启)' }], desc: 'GPU解码开关选择。' },
+      { path: 'reconnect_time', label: '重连时间(秒)', type: 'int', min: 1, desc: '相机断线后该时间内可以恢复重连，正整数。' },
+      { path: 'rtsp_delay', label: 'RTSP延迟', type: 'int', hidden: true, desc: 'RTSP接入延迟控制参数。' },
+      { path: 'max_wait_ms', label: '推理攒批次等待时间(ms)', type: 'int', min: 0, desc: '等待batch_size时间，0表示不等待，非负整数。' },
+      { path: 'vedioRemoveConfig', label: '视频清理配置', type: 'json', desc: '例如 [7, 100]。第一参数表示保留天数，第二参数表示最大文件内存(GB)。' },
+    ]
+  },
+  {
+    title: '视频与WebRTC',
+    fields: [
+      { path: 'image_size', label: '图像尺寸档位', type: 'int', options: [{ value: 0, label: '1920*1080' }, { value: 1, label: '1280*720' }], desc: '推流/显示图像分辨率选择。' },
+      { path: 'rtsp_thread_pool_multiple', label: 'RTSP线程池倍率', type: 'int', min: 1, defaultValue: 1, desc: '线程池缩放因子，正整数，默认1。' },
+      { path: 'web_transport_mode', label: '图片传输模式', type: 'int', readonly: true, desc: 'Web传输方案选择。1表示webRTC传输(不支持修改)' },
+      { path: 'webrtc_sfu_url', label: 'WebRTC SFU地址', type: 'text', readonly: true, desc: 'SFU服务URL。仅支持查看。' },
+      { path: 'webrtc_codec', label: 'WebRTC编码', type: 'text', options: ['auto', 'h264', 'vp8', 'vp9'], desc: 'WebRTC编码选择，支持 auto/h264 等。' },
+      { path: 'webrtc_fps', label: 'WebRTC帧率', type: 'int', min: 1, desc: 'WebRTC推流帧率，正整数。' },
+      { path: 'webrtc_bitrate_kbps', label: 'WebRTC码率(kbps)', type: 'int', min: 1000, max: 5000, desc: 'WebRTC目标码率，范围 1000~5000 kbps。' },
+      
+    ]
+  },
+  {
+    title: '跟踪与检测',
+    fields: [
+      { path: 'bytetrack_enable', label: 'ByteTrack开关', type: 'int', options: [{ value: 0, label: '0(关闭)' }, { value: 1, label: '1(开启)' }], desc: 'ByteTrack开关选择。' },
+      { path: 'bytetrack_track_thresh', label: 'Track阈值', type: 'float', min: 0, max: 1, step: 0.01, desc: 'ByteTrack关联阈值，范围 0~1。' },
+      { path: 'bytetrack_match_thresh', label: 'Match阈值', type: 'float', min: 0, max: 1, step: 0.01, desc: 'ByteTrack匹配阈值，范围 0~1。' },
+      { path: 'bytetrack_max_lost', label: '最大丢失帧数', type: 'int', min: 1, desc: '目标丢失后保留的帧数上限，正整数。' },
+      { path: 'model_params.model_type', label: '检测模型类型', type: 'int', options: [{ value: 0, label: 'yolov5 (0)' }, { value: 4, label: 'yolov12 (4)' }, { value: 5, label: 'yolo26 (5)' }, { value: 6, label: 'dfine (6)' }], desc: '检测模型类型选择。' },
+      { path: 'model_params.confidence_threshold', label: '检测模型推理置信度阈值', type: 'float', min: 0, max: 1, step: 0.01, desc: '检测置信度门限，范围 0~1。' },
+      { path: 'model_params.nms_threshold', label: '检测模型推理NMS阈值', type: 'float', min: 0, max: 1, step: 0.01, desc: '模型NMS阈值，范围 0~1。' },
+      { path: 'areaRate', label: '安全区检测框面积判断阈值', type: 'float', min: 0, max: 1, step: 0.01, desc: '业务区域比例参数，范围 0~1。' },
+      { path: 'bin_nms_percent', label: '库位面积判断阈值', type: 'float', min: 0, max: 1, step: 0.01, desc: '检测框和库位相交面积过滤阈值，范围 0~1。' },
+      { path: 'storage_state_change_count', label: '库位状态变更阈值', type: 'int', min: 1, max: 30, desc: '库位状态连续次数超过该阈值会修改库位状态，范围 1~30。' },
+    ]
+  },
+  {
+    title: '在线学习与存储',
+    fields: [
+      { path: 'online_learning_save_enabled', label: '在线学习保存开关', type: 'int', options: [{ value: 0, label: '0(关闭)' }, { value: 1, label: '1(启用)' }], desc: '1启用保存，0关闭。' },
+      { path: 'online_learning_compress_enabled', label: '在线学习压缩开关', type: 'int', options: [{ value: 0, label: '0(关闭)' }, { value: 1, label: '1(启用)' }], desc: '1启用压缩，0关闭。' },
+      { path: 'online_learning_compress_interval_hours', label: '压缩间隔(小时)', type: 'int', min: 1, desc: '压缩任务触发周期，正整数。' },
+      { path: 'online_learning_cleanup_enabled', label: '清理开关', type: 'int', options: [{ value: 0, label: '0(关闭)' }, { value: 1, label: '1(启用)' }], desc: '1启用定时清理。' },
+      { path: 'online_learning_cleanup_check_interval_hours', label: '清理检查间隔(小时)', type: 'int', min: 1, desc: '检查是否执行清理的间隔，正整数。' },
+      { path: 'online_learning_cleanup_retention_days', label: '保留天数', type: 'int', min: 1, desc: '历史在线学习数据保留时长，正整数。' },
+      { path: 'online_learning_report_enabled', label: '上报开关', type: 'int', options: [{ value: 0, label: '0(关闭)' }, { value: 1, label: '1(启用)' }], desc: '1启用在线学习结果上报。' },
+      { path: 'online_learning_report_interval_days', label: '上报间隔(天)', type: 'int', min: 1, desc: '上报周期，正整数。' },
+      { path: 'online_learning_report_trigger_hour', label: '上报触发小时', type: 'int', min: 0, max: 23, desc: '定时上报触发时间(小时)，范围 0~23。' },
+      { path: 'online_learning_report_trigger_minute', label: '上报触发分钟', type: 'int', min: 0, max: 59, desc: '定时上报触发时间(分钟)，范围 0~59。' },
+      { path: 'online_learning_report_url', label: '上报URL', type: 'text', desc: '在线学习结果上传接口地址。' },
+      
+    ]
+  },
+  {
+    title: 'MQTT通信',
+    fields: [
+      { path: 'mqtt_params.URI', label: 'MQTT地址', type: 'text', desc: 'MQTT服务器IP或域名。' },
+      { path: 'mqtt_params.Port', label: 'MQTT端口', type: 'int', desc: 'MQTT TCP端口。' },
+      { path: 'mqtt_params.wsPort', label: 'MQTT WebSocket端口', type: 'int', desc: 'WebSocket访问端口。' },
+      { path: 'mqtt_params.clientId', label: '服务端ClientId', type: 'text', desc: '后端连接MQTT使用。' },
+      { path: 'mqtt_params.clientIdUI', label: 'UI端ClientId', type: 'text', desc: '前端或UI连接MQTT使用。' },
+    ]
+  },
+];
+
+function escapeHtml(v) {
+  return String(v ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function deepClone(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+
+function getByPath(obj, path) {
+  let cur = obj;
+  for (const seg of path.split('.')) {
+    if (cur == null || typeof cur !== 'object' || !(seg in cur)) return undefined;
+    cur = cur[seg];
+  }
+  return cur;
+}
+
+function setByPath(obj, path, value) {
+  const segs = path.split('.');
+  let cur = obj;
+  for (let i = 0; i < segs.length - 1; i++) {
+    if (typeof cur[segs[i]] !== 'object' || cur[segs[i]] === null) cur[segs[i]] = {};
+    cur = cur[segs[i]];
+  }
+  cur[segs[segs.length - 1]] = value;
+}
+
+function normalizeByType(raw, type) {
+  if (type === 'int') {
+    const v = parseInt(raw, 10);
+    return Number.isNaN(v) ? 0 : v;
+  }
+  if (type === 'float') {
+    const v = parseFloat(raw);
+    return Number.isNaN(v) ? 0 : v;
+  }
+  if (type === 'json') {
+    if ((raw || '').trim() === '') return null;
+    return JSON.parse(raw);
+  }
+  return raw;
+}
+
+function buildFieldInput(field, fieldId, value) {
+  const lockAttr = field.readonly ? 'readonly' : '';
+  const hasOptions = Array.isArray(field.options) && field.options.length > 0;
+  if (field.type === 'select' || hasOptions) {
+    const opts = (field.options || []).map(opt => {
+      const val = (opt && typeof opt === 'object' && 'value' in opt) ? opt.value : opt;
+      const label = (opt && typeof opt === 'object' && 'label' in opt) ? opt.label : opt;
+      return `<option value="${escapeHtml(val)}" ${String(value) === String(val) ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+    }).join('');
+    const disabledAttr = field.readonly ? 'disabled' : '';
+    return `<select id="${fieldId}" class="form-select" ${disabledAttr}>${opts}</select>`;
+  }
+  if (field.type === 'json') {
+    const text = value === undefined ? '' : JSON.stringify(value);
+    return `<textarea id="${fieldId}" class="form-control" rows="2" spellcheck="false" ${lockAttr}>${escapeHtml(text)}</textarea>`;
+  }
+  if (field.type === 'int' || field.type === 'float') {
+    const step = field.step != null ? field.step : (field.type === 'int' ? '1' : '0.01');
+    const val = value ?? '';
+    const minAttr = field.min != null ? `min="${field.min}"` : '';
+    const maxAttr = field.max != null ? `max="${field.max}"` : '';
+    return `<input id="${fieldId}" type="number" step="${step}" ${minAttr} ${maxAttr} class="form-control" value="${escapeHtml(val)}" ${lockAttr}>`;
+  }
+  return `<input id="${fieldId}" type="text" class="form-control" value="${escapeHtml(value ?? '')}" ${lockAttr}>`;
+}
+
+function renderGlobConfigSections(configJson) {
+  const root = (configJson && configJson.glob_config) ? configJson.glob_config : {};
+  globFieldState = [];
+  let html = '';
+  let index = 0;
+
+  for (const group of GLOB_CONFIG_GROUPS) {
+    html += `<div class="cfg-group">`;
+    html += `<div class="d-flex justify-content-between align-items-center mb-2">`;
+    html += `<div class="cfg-group-title mb-0">${escapeHtml(group.title)}</div>`;
+    if (group.title === 'MQTT通信') {
+      html += `
+        <button type="button" class="btn btn-xs btn-outline-info" onclick="testMqttConnection(${index})">
+          <i class="bi bi-broadcast me-1"></i>联通测试
+        </button>
+      `;
+    }
+    html += `</div>`;
+    html += `<div class="row g-3">`;
+    for (const field of group.fields) {
+      if (field.hidden) continue;   // 隐藏字段跳过渲染
+      const fieldId = `gcfg_${index++}`;
+      const rawValue = getByPath(root, field.path);
+      const value = rawValue === undefined ? field.defaultValue : rawValue;
+      globFieldState.push({ id: fieldId, path: field.path, type: field.type || 'text', label: field.label, readonly: !!field.readonly, min: field.min, max: field.max });
+      html += `
+        <div class="col-12 col-md-6">
+          <label class="form-label">${escapeHtml(field.label)}</label>
+          ${buildFieldInput(field, fieldId, value)}
+          <div class="cfg-help">${escapeHtml(field.desc || '')}</div>
+        </div>`;
+    }
+    html += `</div></div>`;
+  }
+
+  document.getElementById('globConfigSections').innerHTML = html;
+}
+
+function readStructuredGlobConfig() {
+  const base = deepClone(rawGlobConfig || { glob_config: {} });
+  if (!base.glob_config || typeof base.glob_config !== 'object') base.glob_config = {};
+
+  for (const field of globFieldState) {
+    if (field.readonly) {
+      continue;
+    }
+    const el = document.getElementById(field.id);
+    if (!el) continue;
+    const raw = el.value;
+    try {
+      const value = normalizeByType(raw, field.type);
+      // 范围校验
+      if ((field.type === 'int' || field.type === 'float') && typeof value === 'number') {
+        if (field.min != null && value < field.min)
+          throw new Error(`不能小于 ${field.min}`);
+        if (field.max != null && value > field.max)
+          throw new Error(`不能大于 ${field.max}`);
+      }
+      setByPath(base.glob_config, field.path, value);
+    } catch (e) {
+      throw new Error(`${field.label} 格式错误: ${e.message}`);
+    }
+  }
+  return base;
+}
+
+async function loadGlobConfig() {
+  document.getElementById('globConfigSections').innerHTML = '<div class="text-secondary small">加载中...</div>';
+  const r = await fetch('/api/config/glob');
+  if (!r.ok) {
+    const e = await r.json();
+    showAlert('configAlert', e.error || '加载失败', 'danger');
+    return;
+  }
+  const j = await r.json();
+  rawGlobConfig = deepClone(j);
+  renderGlobConfigSections(j);
+  hideAlert('configAlert');
+}
+
+async function testMqttConnection(idxOffset) {
+  // 找出当前 globFieldState 中对应的 mqtt_params.URI 和 Port 真实 DOM input
+  let uriVal = '';
+  let portVal = '1883';
+  for (const s of globFieldState) {
+    if (s.path === 'mqtt_params.URI') {
+      const el = document.getElementById(s.id);
+      if (el) uriVal = el.value;
+    } else if (s.path === 'mqtt_params.Port') {
+      const el = document.getElementById(s.id);
+      if (el) portVal = el.value;
+    }
+  }
+
+  showAlert('configAlert', '正在联通测试中，请稍候...', 'info');
+  try {
+    const r = await fetch('/api/config/glob/test_mqtt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uri: uriVal, port: portVal })
+    });
+    const res = await r.json();
+    if (res.ok) {
+      showAlert('configAlert', `<i class="bi bi-check-circle-fill me-1"></i> ${res.msg}`, 'success');
+      toast('MQTT 连接成功', 'success');
+    } else {
+      showAlert('configAlert', `<i class="bi bi-exclamation-triangle-fill me-1"></i> 测试失败: ${res.msg}`, 'danger');
+      toast('MQTT 连接失败', 'danger');
+    }
+  } catch (err) {
+    showAlert('configAlert', `请求出错: ${err.message}`, 'danger');
+  }
+}
+
+async function saveGlobConfig() {
+  let parsed;
+  try {
+    parsed = readStructuredGlobConfig();
+  } catch (e) {
+    showAlert('configAlert', e.message, 'danger');
+    return;
+  }
+  const r = await api('/api/config/glob', 'POST', parsed);
+  if (r.ok) {
+    rawGlobConfig = deepClone(parsed);
+    showAlert('configAlert', `已保存，备份: ${r.backup}`, 'success');
+    syncSubscriptionMonitorConfig(parsed);
+    toast('全局配置已保存', 'success');
+  } else {
+    showAlert('configAlert', r.msg, 'danger');
+  }
+}
+
+function syncSubscriptionMonitorConfig(globConfig) {
+  const gc = globConfig.glob_config || globConfig || {};
+  const mqttParams = gc.mqtt_params || {};
+  const payload = {
+    type: 'bevp:glob-config-updated',
+    mqttHost: mqttParams.URI || mqttParams.uri || '',
+    mqttPort: mqttParams.wsPort || mqttParams.WsPort || mqttParams.websocketPort || mqttParams.Port || '',
+    nodeId: gc.node_id || gc.nodeId || ''
+  };
+
+  const frame = document.getElementById('subscriptionFrame');
+  if (!frame || !frame.contentWindow) return;
+
+  try {
+    if (typeof frame.contentWindow.applyExternalMqttConfig === 'function') {
+      frame.contentWindow.applyExternalMqttConfig(payload, { reconnect: true });
+    } else {
+      frame.contentWindow.postMessage(payload, window.location.origin);
+    }
+  } catch (err) {
+    frame.contentWindow.postMessage(payload, window.location.origin);
+  }
+}
+
+function exportGlobConfig() {
+  window.open('/api/config/glob/export', '_blank');
+}
+
+// ─── 相机配置 ─────────────────────────────────────────────────────────────────
+let cameraConfigData = { camera_config: [] };
+let selectedCameraIndex = -1;
+let _cameraConnectivity = {};  // {ip: true/false}
+
+const CAMERA_FIXED_TEMPLATE = {
+  camera_brand: 'BOSCH_CAMERA',
+  camera_focal: '',
+  camera_model: 1,
+  camera_port: '8000',
+  camera_user: 'service',
+  camera_pwd: '1234Qwer~',
+  distortion_coeffs: [-0.6393, 0.4141, 0.0004342, 0.000177335, 0.0],
+  intrinsic_matrix: [1558.172, 0.0, 966.877, 0.0, 1559.303, 552.568, 0.0, 0.0, 1.0],
+};
+
+function cameraTemplate(nextId) {
+  return {
+    camera_brand: CAMERA_FIXED_TEMPLATE.camera_brand,
+    camera_focal: CAMERA_FIXED_TEMPLATE.camera_focal,
+    camera_function: 'StorageBinMonitor',
+    camera_id: nextId,
+    camera_ip: '',
+    camera_model: CAMERA_FIXED_TEMPLATE.camera_model,
+    camera_partition: 'first',
+    camera_port: CAMERA_FIXED_TEMPLATE.camera_port,
+    camera_pwd: CAMERA_FIXED_TEMPLATE.camera_pwd,
+    camera_state: 'ON',
+    camera_user: CAMERA_FIXED_TEMPLATE.camera_user,
+    distortion_coeffs: [...CAMERA_FIXED_TEMPLATE.distortion_coeffs],
+    intrinsic_matrix: [...CAMERA_FIXED_TEMPLATE.intrinsic_matrix],
+    rotation_coeffs: [],
+    translation_coeffs: [],
+    vec_plane_coeffs: [],
+  };
+}
+
+function setSelectValueOrAppend(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const strValue = String(value ?? '');
+  const exists = Array.from(el.options).some(o => o.value === strValue);
+  if (!exists) {
+    const op = document.createElement('option');
+    op.value = strValue;
+    op.textContent = strValue;
+    el.appendChild(op);
+  }
+  el.value = strValue;
+}
+
+function parseJsonArray(text, fieldName) {
+  const v = (text || '').trim();
+  if (!v) return [];
+  const arr = JSON.parse(v);
+  if (!Array.isArray(arr)) throw new Error(`${fieldName} 必须是数组`);
+  return arr;
+}
+
+function renderCameraTable() {
+  const list = cameraConfigData.camera_config || [];
+  const html = list.map((cam, idx) => {
+    const ip = cam.camera_ip || '';
+    const connStatus = _cameraConnectivity[ip];
+    let connBadge = '<span class="badge bg-secondary">--</span>';
+    if (connStatus !== undefined) {
+      connBadge = connStatus
+        ? '<span class="badge bg-success">在线</span>'
+        : '<span class="badge bg-danger">离线</span>';
+    }
+    return `
+    <tr class="${idx === selectedCameraIndex ? 'table-active' : ''}" style="cursor:pointer" onclick="selectCameraItem(${idx})">
+      <td>${escapeHtml(cam.camera_id ?? '')}</td>
+      <td>${escapeHtml(ip)}</td>
+      <td>${escapeHtml(cam.camera_state ?? '')}</td>
+      <td>${connBadge}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="4" class="text-secondary">暂无相机</td></tr>';
+  document.getElementById('cameraTableBody').innerHTML = html;
+}
+
+function fillCameraForm(cam) {
+  document.getElementById('camId').value = cam.camera_id ?? '';
+  document.getElementById('camIp').value = cam.camera_ip ?? '';
+  document.getElementById('camPort').value = cam.camera_port ?? '';
+  document.getElementById('camUser').value = cam.camera_user ?? '';
+  document.getElementById('camPwd').value = cam.camera_pwd ?? '';
+  document.getElementById('camBrand').value = cam.camera_brand ?? '';
+  setSelectValueOrAppend('camFunction', cam.camera_function ?? 'StorageBinMonitor');
+  document.getElementById('camModel').value = cam.camera_model ?? '';
+  document.getElementById('camPartition').value = cam.camera_partition ?? '';
+  setSelectValueOrAppend('camState', cam.camera_state ?? 'ON');
+  document.getElementById('camFocal').value = cam.camera_focal ?? '';
+  document.getElementById('camDistortion').value = JSON.stringify(cam.distortion_coeffs ?? []);
+  document.getElementById('camIntrinsic').value = JSON.stringify(cam.intrinsic_matrix ?? []);
+}
+
+function collectCameraForm() {
+  return {
+    camera_id: parseInt(document.getElementById('camId').value, 10) || 0,
+    camera_ip: document.getElementById('camIp').value.trim(),
+    camera_port: CAMERA_FIXED_TEMPLATE.camera_port,
+    camera_user: CAMERA_FIXED_TEMPLATE.camera_user,
+    camera_pwd: CAMERA_FIXED_TEMPLATE.camera_pwd,
+    camera_brand: CAMERA_FIXED_TEMPLATE.camera_brand,
+    camera_function: document.getElementById('camFunction').value.trim(),
+    camera_model: CAMERA_FIXED_TEMPLATE.camera_model,
+    camera_partition: document.getElementById('camPartition').value.trim(),
+    camera_state: document.getElementById('camState').value.trim(),
+    camera_focal: CAMERA_FIXED_TEMPLATE.camera_focal,
+    distortion_coeffs: [...CAMERA_FIXED_TEMPLATE.distortion_coeffs],
+    intrinsic_matrix: [...CAMERA_FIXED_TEMPLATE.intrinsic_matrix],
+    rotation_coeffs: [],
+    translation_coeffs: [],
+    vec_plane_coeffs: [],
+  };
+}
+
+function selectCameraItem(index) {
+  selectedCameraIndex = index;
+  const cam = (cameraConfigData.camera_config || [])[index];
+  if (!cam) return;
+  fillCameraForm(cam);
+  renderCameraTable();
+}
+
+function applyFormToCurrentCamera(showMsg = true) {
+  if (selectedCameraIndex < 0) {
+    showAlert('cameraAlert', '请先选择一个相机', 'danger');
+    return false;
+  }
+  try {
+    cameraConfigData.camera_config[selectedCameraIndex] = collectCameraForm();
+    renderCameraTable();
+    if (showMsg) {
+      showAlert('cameraAlert', '已应用到当前相机（未写入文件）', 'success');
+    }
+    return true;
+  } catch (e) {
+    showAlert('cameraAlert', e.message, 'danger');
+    return false;
+  }
+}
+
+function addCameraItem() {
+  const list = cameraConfigData.camera_config || [];
+  const maxId = list.reduce((m, c) => Math.max(m, parseInt(c.camera_id, 10) || 0), -1);
+  const cam = cameraTemplate(maxId + 1);
+  list.push(cam);
+  cameraConfigData.camera_config = list;
+  selectedCameraIndex = list.length - 1;
+  fillCameraForm(cam);
+  renderCameraTable();
+  showAlert('cameraAlert', `已新增相机 camera_id=${cam.camera_id}`, 'success');
+}
+
+function deleteCameraItem() {
+  const list = cameraConfigData.camera_config || [];
+  if (selectedCameraIndex < 0 || selectedCameraIndex >= list.length) {
+    showAlert('cameraAlert', '请先选择要删除的相机', 'danger');
+    return;
+  }
+  const target = list[selectedCameraIndex];
+  if (!confirm(`确认删除相机 camera_id=${target.camera_id}?`)) return;
+  list.splice(selectedCameraIndex, 1);
+  if (list.length === 0) {
+    selectedCameraIndex = -1;
+    fillCameraForm(cameraTemplate(0));
+  } else {
+    selectedCameraIndex = Math.min(selectedCameraIndex, list.length - 1);
+    fillCameraForm(list[selectedCameraIndex]);
+  }
+  renderCameraTable();
+  showAlert('cameraAlert', '已删除当前相机（未写入文件）', 'warning');
+}
+
+async function loadCameraConfig() {
+  const r = await fetch('/api/config/camera');
+  if (!r.ok) {
+    const e = await r.json();
+    showAlert('cameraAlert', e.error || '加载相机配置失败', 'danger');
+    return;
+  }
+  const j = await r.json();
+  cameraConfigData = deepClone(j);
+  if (!Array.isArray(cameraConfigData.camera_config)) {
+    cameraConfigData.camera_config = [];
+  }
+  if (cameraConfigData.camera_config.length > 0) {
+    selectedCameraIndex = 0;
+    fillCameraForm(cameraConfigData.camera_config[0]);
+  } else {
+    selectedCameraIndex = -1;
+    fillCameraForm(cameraTemplate(0));
+  }
+  renderCameraTable();
+  hideAlert('cameraAlert');
+}
+
+async function saveCameraConfig() {
+  if (selectedCameraIndex >= 0 && !applyFormToCurrentCamera(false)) {
+    return;
+  }
+  const r = await api('/api/config/camera', 'POST', cameraConfigData);
+  if (r.ok) {
+    showAlert('cameraAlert', `相机配置已保存，备份: ${r.backup}`, 'success');
+    toast('相机配置保存成功', 'success');
+  } else {
+    showAlert('cameraAlert', r.msg || '保存失败', 'danger');
+  }
+}
+
+// ─── 线库标定 ─────────────────────────────────────────────────────────────────
+let _calibPollTimer = null;
+let _calibLogLen = 0;    // 已渲染的日志行数，用于增量追加
+let _calibRunning = false;
+
+function _setCalibStatus(running, msg, level) {
+  _calibRunning = running;
+  const badge  = document.getElementById('calibBadge');
+  const btnRun  = document.getElementById('btnCalib');
+  const btnStop = document.getElementById('btnCalibStop');
+  const statusEl = document.getElementById('calibStatus');
+
+  if (running) {
+    badge.className = 'badge bg-success';
+    badge.textContent = '运行中';
+    btnRun.classList.add('d-none');
+    btnStop.classList.remove('d-none');
+  } else {
+    badge.className = 'badge bg-secondary';
+    badge.textContent = '未运行';
+    btnRun.classList.remove('d-none');
+    btnStop.classList.add('d-none');
+  }
+
+  if (msg) {
+    statusEl.className = `alert alert-mini alert-${level || 'secondary'}`;
+    statusEl.textContent = msg;
+    statusEl.classList.remove('d-none');
+  }
+}
+
+function _appendCalibLog(lines) {
+  const pre = document.getElementById('calibLog');
+  if (!pre) return;
+  const atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 30;
+  const newLines = lines.slice(_calibLogLen);
+  if (newLines.length > 0) {
+    pre.textContent += newLines.join('\n') + (newLines.length ? '\n' : '');
+    _calibLogLen = lines.length;
+  }
+  if (atBottom) pre.scrollTop = pre.scrollHeight;
+}
+
+async function _pollCalibStatus() {
+  try {
+    const r = await api('/api/calibration/status');
+    _appendCalibLog(r.output || []);
+
+    if (r.running !== _calibRunning) {
+      if (!r.running) {
+        const rc = r.returncode;
+        const msg = rc === 0 ? '标定程序已正常退出' : rc === null ? '标定程序已退出' : `标定程序退出 (返回码 ${rc})`;
+        const lvl = rc === 0 ? 'success' : 'warning';
+        _setCalibStatus(false, msg, lvl);
+        toast(msg, rc === 0 ? 'success' : 'warning');
+      } else {
+        _setCalibStatus(true, null, null);
+      }
+    } else if (r.running) {
+      _calibRunning = true;  // keep in sync
+    }
+  } catch(_) {}
+}
+
+function _startCalibPoll() {
+  if (_calibPollTimer) clearInterval(_calibPollTimer);
+  _calibPollTimer = setInterval(_pollCalibStatus, 1500);
+}
+
+async function startCalib() {
+  const btnRun = document.getElementById('btnCalib');
+  btnRun.disabled = true;
+  const r = await api('/api/calibration/start', 'POST');
+  btnRun.disabled = false;
+  if (r.ok) {
+    _calibLogLen = 0;
+    document.getElementById('calibLog').textContent = '';
+    _setCalibStatus(true, r.msg, 'success');
+    toast(r.msg, 'success');
+    _startCalibPoll();
+  } else {
+    _setCalibStatus(false, r.msg, 'danger');
+    toast(r.msg, 'error');
+  }
+}
+
+async function stopCalib() {
+  const btnStop = document.getElementById('btnCalibStop');
+  btnStop.disabled = true;
+  const r = await api('/api/calibration/stop', 'POST');
+  btnStop.disabled = false;
+  const lvl = r.ok ? 'warning' : 'danger';
+  _setCalibStatus(false, r.msg, lvl);
+  toast(r.msg, r.ok ? 'warning' : 'error');
+}
+
+function clearCalibLog() {
+  document.getElementById('calibLog').textContent = '';
+  _calibLogLen = 0;
+}
+
+// 初始化：进入标定 tab 时拉取一次状态
+document.getElementById('tab-calib-link')?.addEventListener('shown.bs.tab', async () => {
+  try {
+    const r = await api('/api/calibration/status');
+    _appendCalibLog(r.output || []);
+    _setCalibStatus(r.running, r.running ? `运行中 PID: ${r.pid}` : null, r.running ? 'success' : null);
+    if (r.running) _startCalibPoll();
+  } catch(_) {}
+});
+
+// ─── 模型转换 ─────────────────────────────────────────────────────────────────
+let convPollTimer = null;
+let pathBrowserMode = 'input_file';
+let pathBrowserCurrent = '/';
+let pathBrowserParent = '/';
+let pathBrowserModal = null;
+
+async function openPathBrowser(mode) {
+  pathBrowserMode = mode;
+  const titleMap = {
+    input_file: '选择输入ONNX文件',
+    output_dir: '选择输出目录',
+  };
+  document.getElementById('pathBrowserTitle').textContent = titleMap[mode] || '路径选择';
+
+  let startPath = '/';
+  const inputVal = document.getElementById('mInputFile').value.trim();
+  const outputVal = document.getElementById('mOutputFile').value.trim();
+  if (mode === 'input_file' && inputVal) {
+    const idx = inputVal.lastIndexOf('/');
+    startPath = idx > 0 ? inputVal.slice(0, idx) : '/';
+  }
+  if (mode === 'output_dir' && outputVal) {
+    const idx = outputVal.lastIndexOf('/');
+    startPath = idx > 0 ? outputVal.slice(0, idx) : '/';
+  }
+
+  if (!pathBrowserModal) {
+    pathBrowserModal = new bootstrap.Modal(document.getElementById('pathBrowserModal'));
+  }
+  pathBrowserModal.show();
+  await fetchPathList(startPath);
+}
+
+async function fetchPathList(path) {
+  const modeParam = pathBrowserMode === 'input_file' ? 'all' : 'dir';
+  const resp = await api(`/api/fs/list?path=${encodeURIComponent(path)}&mode=${modeParam}`);
+  if (!resp.ok) {
+    toast(resp.msg || '路径读取失败', 'error');
+    return;
+  }
+  pathBrowserCurrent = resp.cwd;
+  pathBrowserParent = resp.parent;
+  document.getElementById('pathBrowserCwd').value = resp.cwd;
+
+  const hint = pathBrowserMode === 'input_file'
+    ? '双击目录进入；点击文件即选中。'
+    : '双击目录进入；点击目录可设为输出目录。';
+  document.getElementById('pathBrowserHint').textContent = hint;
+
+  const html = (resp.entries || []).map(item => {
+    const icon = item.type === 'dir' ? 'bi-folder2-open text-warning' : 'bi-file-earmark text-info';
+    const p = encodeURIComponent(item.path);
+    const t = encodeURIComponent(item.type);
+    const click = `selectPathItemFromEncoded('${p}','${t}')`;
+    const dbl = item.type === 'dir'
+      ? `openChildDirEncoded('${p}')`
+      : `selectPathItemFromEncoded('${p}','${t}')`;
+    return `
+      <div class="path-browser-item" onclick="${click}" ondblclick="${dbl}">
+        <i class="bi ${icon} me-2"></i>${escapeHtml(item.name)}
+      </div>`;
+  }).join('') || '<div class="path-browser-item text-secondary">当前目录为空</div>';
+
+  document.getElementById('pathBrowserList').innerHTML = html;
+}
+
+async function openChildDir(path) {
+  await fetchPathList(path);
+}
+
+function openChildDirEncoded(pathEnc) {
+  openChildDir(decodeURIComponent(pathEnc));
+}
+
+async function browseParentDir() {
+  await fetchPathList(pathBrowserParent || '/');
+}
+
+async function refreshPathBrowser() {
+  await fetchPathList(pathBrowserCurrent || '/');
+}
+
+function withTrtSuffix(filePath) {
+  const idx = filePath.lastIndexOf('.');
+  if (idx > 0) return filePath.slice(0, idx) + '.trtmodel';
+  return filePath + '.trtmodel';
+}
+
+function joinPath(dir, name) {
+  return dir.endsWith('/') ? (dir + name) : (dir + '/' + name);
+}
+
+function selectPathItem(path, type) {
+  if (pathBrowserMode === 'input_file') {
+    if (type === 'dir') {
+      fetchPathList(path);
+      return;
+    }
+    document.getElementById('mInputFile').value = path;
+    const outputCur = document.getElementById('mOutputFile').value.trim();
+    if (!outputCur) {
+      const idx = path.lastIndexOf('/');
+      const name = idx >= 0 ? path.slice(idx + 1) : path;
+      const dir = idx > 0 ? path.slice(0, idx) : '/';
+      document.getElementById('mOutputFile').value = joinPath(dir, withTrtSuffix(name));
+    }
+    pathBrowserModal.hide();
+    return;
+  }
+
+  // output_dir 模式
+  if (type !== 'dir') {
+    toast('请先选择一个目录', 'error');
+    return;
+  }
+  const inputFile = document.getElementById('mInputFile').value.trim();
+  const outputCur = document.getElementById('mOutputFile').value.trim();
+  let outName = 'best.trtmodel';
+  if (outputCur) {
+    const idx = outputCur.lastIndexOf('/');
+    outName = idx >= 0 ? outputCur.slice(idx + 1) : outputCur;
+  } else if (inputFile) {
+    const idx = inputFile.lastIndexOf('/');
+    const inName = idx >= 0 ? inputFile.slice(idx + 1) : inputFile;
+    outName = withTrtSuffix(inName);
+  }
+  document.getElementById('mOutputFile').value = joinPath(path, outName);
+  pathBrowserModal.hide();
+}
+
+function selectPathItemFromEncoded(pathEnc, typeEnc) {
+  selectPathItem(decodeURIComponent(pathEnc), decodeURIComponent(typeEnc));
+}
+
+const MODEL_TYPE_NAMES = {0: 'yolov5', 4: 'yolov12', 5: 'yolo26', 6: 'dfine'};
+
+function getAutoOutputPath() {
+  const mt = parseInt(document.getElementById('mModelType').value) || 0;
+  const name = MODEL_TYPE_NAMES[mt] || 'yolov5';
+  return `model/${name}_model/best.trtmodel`;
+}
+
+function onModelTypeChange() {
+  document.getElementById('mOutputFile').value = getAutoOutputPath();
+  loadModelNames();
+}
+
+// 初始设置输出路径
+setTimeout(() => {
+  document.getElementById('mOutputFile').value = getAutoOutputPath();
+  loadModelNames();
+}, 500);
+
+async function startConvert() {
+  const body = {
+    input_file:     document.getElementById('mInputFile').value.trim(),
+    model_type:     parseInt(document.getElementById('mModelType').value) || 0,
+    precision:      parseInt(document.getElementById('mPrecision').value) || 0,
+    batch_size:     parseInt(document.getElementById('mBatchSize').value) || 4,
+    backup_enabled: document.getElementById('mBackupEnabled').checked,
+  };
+  document.getElementById('convLog').textContent = '';
+  const r = await api('/api/model/convert', 'POST', body);
+  showAlert('convAlert', r.msg, r.ok ? 'success' : 'danger');
+  if (r.ok) {
+    document.getElementById('btnConvert').disabled = true;
+    document.getElementById('btnConvStop').disabled = false;
+    document.getElementById('convStatusBadge').textContent = '转换中';
+    document.getElementById('convStatusBadge').className = 'badge bg-warning text-dark';
+    startConvPoll();
+  }
+}
+
+function startConvPoll() {
+  if (convPollTimer) clearInterval(convPollTimer);
+  convPollTimer = setInterval(pollConvOutput, 1000);
+}
+
+async function pollConvOutput() {
+  const r = await api('/api/model/output');
+  const logEl = document.getElementById('convLog');
+  logEl.textContent = (r.output || []).join('\n');
+  logEl.scrollTop = logEl.scrollHeight;
+  if (!r.running) {
+    clearInterval(convPollTimer);
+    document.getElementById('btnConvert').disabled = false;
+    document.getElementById('btnConvStop').disabled = true;
+    const ok = r.returncode === 0;
+    document.getElementById('convStatusBadge').textContent = ok ? '成功' : `失败(${r.returncode})`;
+    document.getElementById('convStatusBadge').className = `badge bg-${ok ? 'success' : 'danger'}`;
+    toast(ok ? '模型转换成功' : `模型转换失败 (${r.returncode})`, ok ? 'success' : 'error');
+  }
+}
+
+async function stopConvert() {
+  const r = await api('/api/model/stop', 'POST');
+  toast(r.msg, r.ok ? 'success' : 'error');
+}
+
+// ─── 类别文件编辑 ─────────────────────────────────────────────────────────────
+async function loadModelNames() {
+  const mt = parseInt(document.getElementById('mModelType').value) || 0;
+  const r = await api(`/api/model/names?model_type=${mt}`);
+  if (r.ok) {
+    document.getElementById('mNamesEditor').value = r.content || '';
+    hideAlert('namesAlert');
+  } else {
+    showAlert('namesAlert', r.msg || '加载失败', 'danger');
+  }
+}
+
+async function saveModelNames() {
+  const mt = parseInt(document.getElementById('mModelType').value) || 0;
+  const content = document.getElementById('mNamesEditor').value;
+  const r = await api('/api/model/names', 'POST', { model_type: mt, content });
+  if (r.ok) {
+    showAlert('namesAlert', `已保存: ${r.path}`, 'success');
+    toast('类别文件已保存', 'success');
+  } else {
+    showAlert('namesAlert', r.msg || '保存失败', 'danger');
+  }
+}
+
+// ─── GPU 监测 ─────────────────────────────────────────────────────────────────
+function renderGpuStats(gpuList) {
+  const container = document.getElementById('gpuStatsContainer');
+  if (!gpuList || gpuList.length === 0) {
+    container.innerHTML = '<div class="text-secondary small">未检测到 GPU 或 nvidia-smi 不可用</div>';
+    return;
+  }
+  container.innerHTML = gpuList.map(gpu => {
+    const memPercent = gpu.memory_total_mb > 0
+      ? Math.round(gpu.memory_used_mb / gpu.memory_total_mb * 100)
+      : 0;
+    const utilColor = gpu.utilization > 80 ? 'bg-danger' : gpu.utilization > 50 ? 'bg-warning' : 'bg-success';
+    const memColor = memPercent > 80 ? 'bg-danger' : memPercent > 50 ? 'bg-warning' : 'bg-info';
+    return `
+      <div class="col-12">
+        <div class="cfg-group">
+          <div class="cfg-group-title d-flex justify-content-between align-items-center mb-3">
+            <span class="fw-bold"><i class="bi bi-gpu-card me-2"></i>GPU ${gpu.index}: ${escapeHtml(gpu.name)}</span>
+            <span class="badge bg-secondary p-1">温度: ${gpu.temperature}°C</span>
+          </div>
+          <div class="row g-3">
+            <!-- 左侧一栏：物理 GPU 整体状态 -->
+            <div class="col-md-6 border-end border-secondary-subtle pe-md-4">
+              <div class="small text-secondary mb-2 fw-semibold">系统整体 GPU 状态</div>
+              <div class="mb-2">
+                <div class="d-flex justify-content-between small mb-1">
+                  <span>总占用率</span><span class="text-warning fw-bold">${gpu.utilization}%</span>
+                </div>
+                <div class="progress" style="height:6px;">
+                  <div class="progress-bar ${utilColor}" style="width:${gpu.utilization}%"></div>
+                </div>
+              </div>
+              <div class="mb-2">
+                <div class="d-flex justify-content-between small mb-1">
+                  <span>总显存</span><span class="text-info fw-bold">${gpu.memory_used_mb} / ${gpu.memory_total_mb} MB (${memPercent}%)</span>
+                </div>
+                <div class="progress" style="height:6px;">
+                  <div class="progress-bar ${memColor}" style="width:${memPercent}%"></div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 右侧一栏：目标业务程序特定状态 -->
+            <div class="col-md-6 ps-md-4">
+              <div class="small text-secondary mb-2 fw-semibold">目标程序占用情况</div>
+              ${gpu.target ? `
+                <div class="mb-2">
+                  <div class="d-flex justify-content-between small mb-1">
+                    <span>GPU 运算占用 (SM)</span><span class="text-warning fw-bold">${gpu.target.sm_utilization}%</span>
+                  </div>
+                  <div class="progress" style="height:6px;">
+                    <div class="progress-bar bg-warning" style="width:${gpu.target.sm_utilization}%"></div>
+                  </div>
+                </div>
+                <div class="mb-2">
+                  <div class="d-flex justify-content-between small mb-1">
+                    <span>独占显存</span><span class="text-info fw-bold">${gpu.target.used_memory_mb} MB</span>
+                  </div>
+                  <div class="progress" style="height:6px;">
+                    <div class="progress-bar bg-info" style="width:${Math.min(100, Math.round(gpu.target.used_memory_mb / (gpu.memory_total_mb || 1) * 100))}%"></div>
+                  </div>
+                </div>
+                <div class="d-flex justify-content-between small text-secondary mt-1">
+                  <span>视频编解码器：ENC(编码) ${gpu.target.enc_utilization}% / DEC(解码) ${gpu.target.dec_utilization}%</span>
+                </div>
+              ` : `
+                <div class="d-flex flex-column align-items-center justify-content-center h-100 text-secondary py-3 small">
+                  <i class="bi bi-slash-circle mb-1" style="font-size: 1.2rem;"></i>
+                  <span>目标程序未占用当前 GPU 或未运行</span>
+                </div>
+              `}
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ─── 开机自启 ─────────────────────────────────────────────────────────────────
+async function refreshAutostartStatus() {
+  const r = await api('/api/autostart/status');
+  const badge = document.getElementById('autostartBadge');
+  const chk = document.getElementById('sCfgAutostart');
+  if (r.enabled) {
+    badge.textContent = '已启用';
+    badge.className = 'badge bg-success';
+    chk.checked = true;
+  } else {
+    badge.textContent = '未启用';
+    badge.className = 'badge bg-secondary';
+    chk.checked = false;
+  }
+}
+
+async function enableAutostart() {
+  const r = await api('/api/autostart/enable', 'POST', {});
+  toast(r.msg, r.ok ? 'success' : 'error');
+  refreshAutostartStatus();
+}
+
+async function disableAutostart() {
+  if (!confirm('确认禁用目标程序开机自启？')) return;
+  const r = await api('/api/autostart/disable', 'POST', {});
+  toast(r.msg, r.ok ? 'success' : 'error');
+  refreshAutostartStatus();
+}
+
+// ─── 相机联通监测 ─────────────────────────────────────────────────────────────
+let _cameraMonitorPollTimer = null;
+
+async function toggleCameraMonitor() {
+  const enabled = document.getElementById('cameraMonitorToggle').checked;
+  await api('/api/camera/monitor/toggle', 'POST', { enabled });
+  if (enabled) {
+    startCameraMonitorPoll();
+    toast('相机联通监测已开启', 'success');
+  } else {
+    stopCameraMonitorPoll();
+    _cameraConnectivity = {};
+    renderCameraTable();
+    toast('相机联通监测已关闭', 'info');
+  }
+}
+
+function startCameraMonitorPoll() {
+  if (_cameraMonitorPollTimer) clearInterval(_cameraMonitorPollTimer);
+  pollCameraConnectivity();
+  _cameraMonitorPollTimer = setInterval(pollCameraConnectivity, 8000);
+}
+
+function stopCameraMonitorPoll() {
+  if (_cameraMonitorPollTimer) {
+    clearInterval(_cameraMonitorPollTimer);
+    _cameraMonitorPollTimer = null;
+  }
+}
+
+async function pollCameraConnectivity() {
+  const r = await api('/api/camera/connectivity');
+  if (r.status) {
+    const newStatus = {};
+    for (const [ip, info] of Object.entries(r.status)) {
+      newStatus[ip] = info.reachable;
+    }
+    _cameraConnectivity = newStatus;
+    renderCameraTable();
+  }
+}
+
+async function loadCameraMonitorState() {
+  const r = await api('/api/camera/connectivity');
+  const toggle = document.getElementById('cameraMonitorToggle');
+  toggle.checked = !!r.enabled;
+  if (r.enabled) {
+    startCameraMonitorPoll();
+  }
+}
+
+// ─── 路径设置 ─────────────────────────────────────────────────────────────────
+async function loadSettings() {
+  const cfg = await api('/api/config/panel');
+  document.getElementById('sCfgCmd').value      = cfg.main_program_cmd   || '';
+  document.getElementById('sCfgName').value     = cfg.main_program_name  || '';
+  document.getElementById('sCfgCalib').value    = cfg.calibration_program || '';
+  document.getElementById('sCfgConv').value     = cfg.model_conversion_program || '';
+  document.getElementById('sCfgGlob').value     = cfg.glob_config_path   || '';
+  document.getElementById('sCfgCamera').value   = cfg.camera_config_path || '';
+  document.getElementById('sCfgMemGuardEnabled').checked = !!cfg.memory_guard_enabled;
+  document.getElementById('sCfgMemLimit').value = (cfg.memory_limit_mb ?? 4096);
+  document.getElementById('sCfgMemCheckSec').value = (cfg.memory_guard_check_sec ?? 5);
+  document.getElementById('sCfgMemCooldownSec').value = (cfg.memory_guard_restart_cooldown_sec ?? 30);
+  // 加载长期历史采样间隔
+  const ltSec = cfg.lt_sample_interval_sec ?? 1800;
+  const ltSel = document.getElementById('sCfgLtSampleInterval');
+  if (ltSel) {
+    // 动态添加非标准默认值的 option，避免未知配置造成渲染空白
+    if (![120, 300, 600, 1800, 3600, 7200].includes(Number(ltSec))) {
+      const opt = document.createElement('option');
+      opt.value = ltSec;
+      opt.textContent = `${Math.round(ltSec/60)} 分钟 (自定义)`;
+      ltSel.appendChild(opt);
+    }
+    ltSel.value = ltSec;
+  }
+  document.getElementById('sCfgCameraMonitor').checked = !!cfg.camera_monitor_enabled;
+  document.getElementById('sCfgCameraMonitorSec').value = (cfg.camera_monitor_interval_sec ?? 10);
+  document.getElementById('sCfgProcLogPersistEnabled').checked = !!cfg.process_log_persist_enabled;
+  document.getElementById('sCfgProcLogLineThreshold').value = (cfg.process_log_line_threshold ?? 2000);
+  document.getElementById('sCfgProcLogCleanupDays').value = (cfg.process_log_cleanup_days ?? 7);
+  // 标定面板显示
+  document.getElementById('calibProg').value    = cfg.calibration_program || '';
+  // 加载自启状态
+  refreshAutostartStatus();
+}
+
+async function saveLtSampleInterval() {
+  const ltSel = document.getElementById('sCfgLtSampleInterval');
+  if (!ltSel) return;
+  const interval = parseInt(ltSel.value, 10) || 1800;
+  try {
+    // 获取当前完整配置，更新 lt_sample_interval_sec 后保存
+    const cfg = await api('/api/config/panel');
+    cfg.lt_sample_interval_sec = interval;
+    const r = await api('/api/config/panel', 'POST', cfg);
+    if (r.ok) {
+      toast(`长期历史采样间隔已成功调节为 ${Math.round(interval/60)} 分钟`, 'success');
+    } else {
+      toast(r.msg || '长期历史采样间隔保存失败', 'danger');
+    }
+  } catch (err) {
+    toast('长期历史采样间隔保存接口请求错误', 'danger');
+  }
+}
+
+async function saveSettings() {
+  const memLimit = Math.max(1, parseInt(document.getElementById('sCfgMemLimit').value, 10) || 4096);
+  const memCheckSec = Math.max(1, parseInt(document.getElementById('sCfgMemCheckSec').value, 10) || 5);
+  const memCooldownSec = Math.max(5, parseInt(document.getElementById('sCfgMemCooldownSec').value, 10) || 30);
+  const cameraMonitorSec = Math.max(3, parseInt(document.getElementById('sCfgCameraMonitorSec').value, 10) || 10);
+  const procLogLineThreshold = Math.max(100, parseInt(document.getElementById('sCfgProcLogLineThreshold').value, 10) || 2000);
+  const procLogCleanupDays = Math.max(1, parseInt(document.getElementById('sCfgProcLogCleanupDays').value, 10) || 7);
+
+  const body = {
+    main_program_cmd:          document.getElementById('sCfgCmd').value.trim(),
+    main_program_name:         document.getElementById('sCfgName').value.trim(),
+    calibration_program:       document.getElementById('sCfgCalib').value.trim(),
+    model_conversion_program:  document.getElementById('sCfgConv').value.trim(),
+    glob_config_path:          document.getElementById('sCfgGlob').value.trim(),
+    camera_config_path:        document.getElementById('sCfgCamera').value.trim(),
+    memory_guard_enabled:      document.getElementById('sCfgMemGuardEnabled').checked,
+    memory_limit_mb:           memLimit,
+    memory_guard_check_sec:    memCheckSec,
+    memory_guard_restart_cooldown_sec: memCooldownSec,
+    camera_monitor_enabled:    document.getElementById('sCfgCameraMonitor').checked,
+    camera_monitor_interval_sec: cameraMonitorSec,
+    process_log_persist_enabled: document.getElementById('sCfgProcLogPersistEnabled').checked,
+    process_log_line_threshold: procLogLineThreshold,
+    process_log_cleanup_days: procLogCleanupDays,
+  };
+  const r = await api('/api/config/panel', 'POST', body);
+  showAlert('settingsAlert', r.ok ? '设置已保存' : (r.msg || '保存失败'),
+    r.ok ? 'success' : 'danger');
+  if (r.ok) {
+    document.getElementById('calibProg').value    = body.calibration_program;
+    toast('路径设置已保存', 'success');
+  }
+}
+
+function downloadPanelConfig() {
+  window.open('/api/config/panel/download', '_blank');
+}
+
+// ─── 日志文件浏览器 ──────────────────────────────────────────────────────────
+let _logBrowserModal = null;
+let _logBrowserCwd = '';
+
+function openLogBrowser() {
+  if (!_logBrowserModal) {
+    _logBrowserModal = new bootstrap.Modal(document.getElementById('logBrowserModal'));
+  }
+  _logBrowserCwd = '';
+  _logBrowserModal.show();
+  logBrowserRefresh();
+}
+
+function logBrowserUp() {
+  if (!_logBrowserCwd) return;
+  const parts = _logBrowserCwd.split('/').filter(Boolean);
+  parts.pop();
+  _logBrowserCwd = parts.join('/');
+  logBrowserRefresh();
+}
+
+async function logBrowserRefresh() {
+  const listEl = document.getElementById('logBrowserList');
+  const cwdEl = document.getElementById('logBrowserCwd');
+  cwdEl.value = '/' + _logBrowserCwd;
+  listEl.innerHTML = '<div class="text-muted text-center py-3">加载中...</div>';
+
+  try {
+    const resp = await fetch('/api/logs/list?sub=' + encodeURIComponent(_logBrowserCwd));
+    const data = await resp.json();
+    if (!data.ok) { listEl.innerHTML = `<div class="text-danger py-2">${data.msg}</div>`; return; }
+
+    if (!data.entries || data.entries.length === 0) {
+      listEl.innerHTML = '<div class="text-muted text-center py-3">（空目录）</div>';
+      return;
+    }
+
+    let html = '<table class="table table-sm table-dark table-hover mb-0" style="font-size:.82rem;"><thead><tr><th>名称</th><th style="width:90px">大小</th><th style="width:140px">修改时间</th><th style="width:60px">操作</th></tr></thead><tbody>';
+    for (const e of data.entries) {
+      const icon = e.is_dir ? '<i class="bi bi-folder-fill text-warning me-1"></i>' : '<i class="bi bi-file-text me-1"></i>';
+      const nameHtml = e.is_dir
+        ? `<a href="#" onclick="logBrowserEnter('${e.path.replace(/'/g, "\\'")}');return false;" class="text-info text-decoration-none">${icon}${e.name}</a>`
+        : `${icon}${e.name}`;
+      const size = e.is_dir ? '-' : _formatFileSize(e.size);
+      const mtime = e.mtime ? new Date(e.mtime * 1000).toLocaleString('zh-CN') : '-';
+      const dlBtn = e.is_dir ? '' : `<a href="/api/logs/download-file?path=${encodeURIComponent(e.path)}" class="btn btn-sm btn-outline-success py-0 px-1" title="下载"><i class="bi bi-download"></i></a>`;
+      html += `<tr><td>${nameHtml}</td><td>${size}</td><td>${mtime}</td><td>${dlBtn}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    listEl.innerHTML = html;
+  } catch (err) {
+    listEl.innerHTML = `<div class="text-danger py-2">请求失败: ${err.message}</div>`;
+  }
+}
+
+function logBrowserEnter(path) {
+  _logBrowserCwd = path;
+  logBrowserRefresh();
+}
+
+function _formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+async function exportPanelLogs() {
+  const r = await api('/api/logs/export', 'POST', {});
+  if (!r.ok) {
+    toast(r.msg || '日志压缩导出失败', 'error');
+    return;
+  }
+  if (r.download_url) {
+    window.open(r.download_url, '_blank');
+    toast('日志压缩包已生成，开始下载', 'success');
+  } else {
+    toast('日志压缩包已生成', 'success');
+  }
+}
+
+// ─── 工具 ─────────────────────────────────────────────────────────────────────
+function showAlert(id, msg, type) {
+  const el = document.getElementById(id);
+  el.className = `alert alert-mini alert-${type}`;
+  el.textContent = msg;
+  el.classList.remove('d-none');
+}
+function hideAlert(id) {
+  document.getElementById(id).classList.add('d-none');
+}
+
+// ─── Web 终端 ─────────────────────────────────────────────────────────────────
+let _webTerm = null;       // xterm.js Terminal instance
+let _webTermFit = null;    // FitAddon
+let _webTermId = null;     // 后端终端会话 ID
+let _webTermSSE = null;    // EventSource
+
+function webTermCreate() {
+  if (_webTermId) {
+    toast('终端已存在，请先关闭当前终端', 'warning');
+    return;
+  }
+  fetch('/api/terminal/create', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) { toast(data.msg || '创建终端失败', 'error'); return; }
+      _webTermId = data.id;
+      _initXterm();
+      _connectTermSSE();
+      document.getElementById('webTermStatus').textContent = '已连接';
+      document.getElementById('webTermStatus').className = 'text-success small ms-2';
+    })
+    .catch(e => toast('创建终端请求失败: ' + e.message, 'error'));
+}
+
+function _initXterm() {
+  const container = document.getElementById('webTermContainer');
+  container.innerHTML = '';
+  _webTerm = new Terminal({
+    cursorBlink: true,
+    fontSize: 14,
+    fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
+    theme: { background: '#0a0c12', foreground: '#e0e0e0', cursor: '#4f8ef7' },
+  });
+  _webTermFit = new FitAddon.FitAddon();
+  _webTerm.loadAddon(_webTermFit);
+  _webTerm.open(container);
+  _webTermFit.fit();
+
+  // 发送用户输入到后端
+  _webTerm.onData(data => {
+    if (!_webTermId) return;
+    fetch('/api/terminal/input/' + _webTermId, {
+      method: 'POST',
+      body: data,
+      headers: { 'Content-Type': 'application/octet-stream' },
+    });
+  });
+
+  // 初始 resize
+  _sendResize();
+  _webTerm.onResize(() => _sendResize());
+
+  // 窗口变化自适应
+  window.addEventListener('resize', () => {
+    if (_webTermFit && _webTerm) { _webTermFit.fit(); }
+  });
+  // 切到终端 tab 时 fit
+  document.getElementById('tab-terminal-link').addEventListener('shown.bs.tab', () => {
+    if (_webTermFit && _webTerm) { _webTermFit.fit(); }
+  });
+}
+
+function _sendResize() {
+  if (!_webTermId || !_webTerm) return;
+  fetch('/api/terminal/resize/' + _webTermId, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cols: _webTerm.cols, rows: _webTerm.rows }),
+  });
+}
+
+function _connectTermSSE() {
+  if (_webTermSSE) { _webTermSSE.close(); }
+  _webTermSSE = new EventSource('/api/terminal/stream/' + _webTermId);
+  _webTermSSE.onmessage = (ev) => {
+    // base64 decoded
+    const bytes = Uint8Array.from(atob(ev.data), c => c.charCodeAt(0));
+    _webTerm.write(bytes);
+  };
+  _webTermSSE.addEventListener('exit', () => {
+    _webTerm.write('\r\n\x1b[33m[终端已断开]\x1b[0m\r\n');
+    document.getElementById('webTermStatus').textContent = '已断开';
+    document.getElementById('webTermStatus').className = 'text-warning small ms-2';
+    _webTermSSE.close();
+    _webTermSSE = null;
+    _webTermId = null;
+  });
+  _webTermSSE.onerror = () => {
+    document.getElementById('webTermStatus').textContent = '连接断开';
+    document.getElementById('webTermStatus').className = 'text-danger small ms-2';
+  };
+}
+
+function webTermDestroy() {
+  if (!_webTermId) { toast('没有活跃终端', 'warning'); return; }
+  fetch('/api/terminal/destroy/' + _webTermId, { method: 'POST' })
+    .then(() => {
+      if (_webTermSSE) { _webTermSSE.close(); _webTermSSE = null; }
+      if (_webTerm) { _webTerm.write('\r\n\x1b[31m[终端已关闭]\x1b[0m\r\n'); }
+      _webTermId = null;
+      document.getElementById('webTermStatus').textContent = '未连接';
+      document.getElementById('webTermStatus').className = 'text-muted small ms-2';
+    })
+    .catch(e => toast('关闭终端失败: ' + e.message, 'error'));
+}
+
+// ─── 初始化 ───────────────────────────────────────────────────────────────────
+(async () => {
+  await loadSettings();
+  loadGlobConfig();
+  loadCameraConfig();
+  loadCameraMonitorState();
+})();
+</script>
+</body>
+</html>

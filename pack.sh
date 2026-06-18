@@ -1,0 +1,1 @@
+pyinstaller --noconfirm --clean --onefile --name control_panel --add-data "templates:templates" control_panel.py
